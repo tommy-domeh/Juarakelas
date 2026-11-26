@@ -12,6 +12,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <!-- PDF.js untuk membaca file PDF Kisi-Kisi -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- Firebase Compat SDK untuk sinkronisasi cloud antar PC & iPad -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <!-- React & Babel Standalone agar 1 file langsung jalan di Vercel & iPad -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -35,8 +38,67 @@
     }
 
     // ========================================================================
+    // KONFIGURASI CLOUD FIREBASE (juarakelas-9b8e1) UNTUK SINKRON PC <-> IPAD
+    // ========================================================================
+    const FIREBASE_CONFIG = {
+      apiKey: 'AIzaSyALE0xFXT1X0BFuhKWu5haYKvT7KWTaiMg',
+      authDomain: 'juarakelas-9b8e1.firebaseapp.com',
+      projectId: 'juarakelas-9b8e1',
+      storageBucket: 'juarakelas-9b8e1.firebasestorage.app',
+      messagingSenderId: '869988330041',
+      appId: '1:869988330041:web:76e39d7ed55637dcbdbbe8'
+    };
+
+    let firestoreDb = null;
+    const CLOUD_COLLECTION = 'juarakelas_packages';
+
+    try {
+      if (window.firebase) {
+        const fbApp = window.firebase.apps.length
+          ? window.firebase.app()
+          : window.firebase.initializeApp(FIREBASE_CONFIG);
+        firestoreDb = window.firebase.firestore(fbApp);
+      }
+    } catch (e) {
+      firestoreDb = null;
+    }
+
+    async function savePackageToCloud(pkgObj) {
+      if (!firestoreDb) return false;
+      try {
+        await firestoreDb
+          .collection(CLOUD_COLLECTION)
+          .doc(pkgObj.id)
+          .set({
+            ...pkgObj,
+            updatedAt: Date.now()
+          });
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    async function deletePackageFromCloud(pkgId) {
+      if (!firestoreDb) return false;
+      try {
+        await firestoreDb.collection(CLOUD_COLLECTION).doc(pkgId).delete();
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    // ========================================================================
     // PAKET SOAL BAWAAN (KELAS 2 - SEMESTER 1 - BAHASA INGGRIS)
     // ========================================================================
+    const DEFAULT_KISI_KISI = `KISI-KISI ASESMEN SUMATIF AKHIR SEMESTER (ASAS)
+Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
+1. Family Members & Introducing Family (Grandfather, This is my...)
+2. Adab to Parents & Polite Words (Yes, certainly / You are welcome)
+3. Animals, Sirah Cave Thawr (spider/web), & a/an
+4. Prepositions in/on & word order`;
+
     const DEFAULT_BUILTIN_PACKAGE = {
       id: 'builtin_kls2_sem1_english',
       isBuiltin: true,
@@ -54,7 +116,7 @@
           unit: 'Unit 1: Family Members',
           visualEmoji: '👴👓🦯',
           visualCaption: 'Ilustrasi gambar seorang kakek yang ramah berambut putih sedang tersenyum.',
-          question: "Look at the picture! He is my father's father. Who is he?",
+          question: 'Look at the picture! He is my father’s father. Who is he?',
           options: [
             { key: 'A', text: 'Grandmother' },
             { key: 'B', text: 'Grandfather' },
@@ -63,172 +125,23 @@
           ],
           correctAnswer: 'B',
           explanation:
-            'Langkah 1: Perhatikan petunjuk "my father\'s father" (ayah dari ayahku) dan gambar seorang kakek.\nLangkah 2: Dalam Bahasa Inggris, kakek adalah "Grandfather", sedangkan nenek adalah "Grandmother".\nLangkah 3: Maka jawaban yang tepat adalah B. Grandfather.',
+            'Langkah 1: Perhatikan petunjuk "my father’s father" (ayah dari ayahku) dan gambar kakek.\nLangkah 2: Kakek dalam Bahasa Inggris adalah "Grandfather".',
           trapWarning:
-            'Jangan tertukar antara "Grandfather" (kakek) dan "Grandmother" (nenek)! Perhatikan juga kata ganti "He" (dia laki-laki) pada soal.'
+            'Jangan tertukar antara "Grandfather" (kakek) dan "Grandmother" (nenek).'
         },
         {
           id: 'q2',
-          type: 'pg',
-          unit: 'Unit 1: Introducing Family',
-          visualEmoji: '👧👉👩🧕',
-          visualCaption: 'Aisyah menunjuk seorang wanita dewasa dan memperkenalkannya kepada temannya.',
-          question:
-            'Aisyah: "Hello, Zahra! ... my mother. Her name is Mrs. Fatimah."\nZahra: "Nice to meet you, Mrs. Fatimah."',
-          options: [
-            { key: 'A', text: 'This is' },
-            { key: 'B', text: 'He is' },
-            { key: 'C', text: 'They are' },
-            { key: 'D', text: 'I am' }
-          ],
-          correctAnswer: 'A',
-          explanation:
-            'Langkah 1: Aisyah sedang memperkenalkan ibunya ("my mother") kepada Zahra.\nLangkah 2: Ungkapan Bahasa Inggris untuk memperkenalkan satu anggota keluarga adalah "This is my...".\nLangkah 3: Jadi kalimat lengkapnya menjadi "This is my mother."',
-          trapWarning:
-            'Jangan pilih "He is" karena ibu adalah perempuan (seharusnya She is). Pilihan "This is" paling tepat untuk memperkenalkan seseorang secara langsung.'
-        },
-        {
-          id: 'q3',
-          type: 'pg',
-          unit: 'Unit 1: Adab to Parents (Birrul Walidain)',
-          visualEmoji: '🧕🗣️👦✨',
-          visualCaption: 'Ibu meminta tolong kepada Ahmad untuk mengambilkan buku di atas meja.',
-          question:
-            'Mother: "Ahmad, please help me take that book."\nAhmad: "..., Mom. I will take it for you."',
-          options: [
-            { key: 'A', text: 'No, I am busy' },
-            { key: 'B', text: 'Yes, certainly' },
-            { key: 'C', text: 'Go away' },
-            { key: 'D', text: "I don't care" }
-          ],
-          correctAnswer: 'B',
-          explanation:
-            'Langkah 1: Sebagai anak yang berbakti kepada orang tua (Birrul Walidain), saat orang tua meminta bantuan kita harus menjawab dengan ramah dan santun.\nLangkah 2: "Yes, certainly" artinya "Ya, tentu saja", merupakan jawaban sopan saat bersedia membantu.',
-          trapWarning:
-            'Hati-hati memilih jawaban yang bernada menolak atau kasar seperti "No, I am busy". Selalu pilih respons yang menunjukkan adab sopan santun.'
-        },
-        {
-          id: 'q4',
-          type: 'pg',
-          unit: 'Unit 2: Animals & Expressing Admiration',
-          visualEmoji: '🐘🦒🦓😲✨',
-          visualCaption: 'Ali melihat hewan gajah yang sangat besar dan indah ciptaan Allah di kebun binatang.',
-          question:
-            'Ali sees a very big and amazing elephant created by Allah. What should Ali say?',
-          options: [
-            { key: 'A', text: 'Innalillahi' },
-            { key: 'B', text: 'Astaghfirullah' },
-            { key: 'C', text: 'MasyaAllah' },
-            { key: 'D', text: 'See you later' }
-          ],
-          correctAnswer: 'C',
-          explanation:
-            'Langkah 1: Ali merasa takjub dan kagum saat melihat kebesaran ciptaan Allah (hewan gajah yang besar).\nLangkah 2: Kalimat thayyibah yang diucapkan ketika kagum melihat ciptaan Allah adalah "MasyaAllah".',
-          trapWarning:
-            'Jangan tertukar dengan "Astaghfirullah" (istighfar saat berbuat salah) atau "Innalillahi" (saat mendengar musibah).'
-        },
-        {
-          id: 'q5',
-          type: 'pg',
-          unit: 'Unit 2: Sirah Animals',
-          visualEmoji: '🕸️🕷️🕊️⛰️',
-          visualCaption: 'Ilustrasi pintu Gua Tsur yang tertutup jaring laba-laba dan sarang burung merpati.',
-          question:
-            'In the story of Cave Thawr (Gua Tsur), which small animal made a web to protect Prophet Muhammad SAW?',
-          options: [
-            { key: 'A', text: 'A spider' },
-            { key: 'B', text: 'A lion' },
-            { key: 'C', text: 'A rabbit' },
-            { key: 'D', text: 'A fish' }
-          ],
-          correctAnswer: 'A',
-          explanation:
-            'Langkah 1: Ingat kisah perjalanan hijrah Rasulullah SAW bersama Abu Bakar Ash-Shiddiq di Gua Tsur.\nLangkah 2: Allah memerintahkan seekor laba-laba ("spider") untuk membuat jaring ("web") dan burung merpati ("dove") bertelur di mulut gua sehingga musuh mengira gua itu kosong.',
-          trapWarning:
-            'Perhatikan kata kunci "made a web" (membuat jaring). Hewan yang membuat jaring adalah spider (laba-laba).'
-        },
-        {
-          id: 'q6',
-          type: 'pg',
-          unit: 'Unit 3: Helping at Home & Polite Words',
-          visualEmoji: '🧹🏠👦🤝👩',
-          visualCaption: 'Umar membantu ibunya menyapu lantai ruang tamu sampai bersih.',
-          question:
-            'Umar helps his mother sweep the floor.\nMother: "Thank you for helping me, Umar."\nUmar: "..."',
-          options: [
-            { key: 'A', text: 'I am sorry' },
-            { key: 'B', text: 'You are welcome' },
-            { key: 'C', text: 'Good night' },
-            { key: 'D', text: 'Help me' }
-          ],
-          correctAnswer: 'B',
-          explanation:
-            'Langkah 1: Ibu mengucapkan terima kasih ("Thank you") kepada Umar karena sudah membantu menyapu lantai.\nLangkah 2: Jawaban sopan saat seseorang mengucapkan "Thank you" adalah "You are welcome" (Sama-sama).',
-          trapWarning:
-            'Jangan tertukar dengan "I am sorry" (Saya minta maaf). "Thank you" selalu dijawab dengan "You are welcome".'
-        },
-        {
-          id: 'q7',
-          type: 'pg',
-          unit: 'Unit 4: Rooms in the House & Prepositions (in/on)',
-          visualEmoji: '📕⬆️🪑🛋️',
-          visualCaption: 'Sebuah buku cerita diletakkan menempel di atas permukaan meja di ruang tamu.',
-          question:
-            'Look at the living room! Where is the red book? The book is ... the table.',
-          options: [
-            { key: 'A', text: 'in' },
-            { key: 'B', text: 'on' },
-            { key: 'C', text: 'at' },
-            { key: 'D', text: 'to' }
-          ],
-          correctAnswer: 'B',
-          explanation:
-            'Langkah 1: Perhatikan posisi buku terhadap meja ("table"). Buku berada menempel di atas permukaan meja.\nLangkah 2: Preposisi tempat untuk "di atas permukaan" dalam Bahasa Inggris adalah "on".\nLangkah 3: Jadi kalimat yang tepat adalah "The book is on the table."',
-          trapWarning:
-            'Bedakan "on" (di atas permukaan meja) dengan "in" (di dalam wadah/laci tertutup).'
-        },
-        {
-          id: 'q8',
-          type: 'essay',
-          unit: 'Unit 2: Sentence Structure (a / an)',
-          visualEmoji: '🐘 Gray & Big',
-          visualCaption: 'Seekor gajah besar berwarna abu-abu dengan telinga lebar dan belalai panjang.',
-          question: 'Complete the sentence using "a" or "an":\n"It is ... elephant."',
-          sampleAnswer: 'an',
-          correctAnswer: 'an',
-          explanation:
-            'Langkah 1: Perhatikan huruf pertama dan bunyi awal dari kata "elephant".\nLangkah 2: Kata "elephant" diawali bunyi huruf vokal /e/ (a, i, u, e, o).\nLangkah 3: Untuk kata benda tunggal yang diawali bunyi vokal, gunakan artikel "an" -> "It is an elephant."',
-          trapWarning:
-            'Gunakan "an" di depan kata berbunyi vokal (seperti an apple, an elephant), dan gunakan "a" di depan kata berbunyi konsonan (seperti a cat, a big elephant).'
-        },
-        {
-          id: 'q9',
-          type: 'essay',
-          unit: 'Unit 3: Sentence Building (Word Order)',
-          visualEmoji: '🍽️🫧🧽👦',
-          visualCaption: 'Seorang anak sedang mencuci piring bersih di dapur setelah makan.',
-          question: 'Arrange these scrambled words into a correct sentence:\n"wash - I - the - dishes"',
-          sampleAnswer: 'I wash the dishes.',
-          correctAnswer: 'I wash the dishes.',
-          explanation:
-            'Langkah 1: Tentukan Subjek (pelaku) di awal kalimat -> "I".\nLangkah 2: Tentukan Kata Kerja (aktivitas) setelah subjek -> "wash".\nLangkah 3: Tambahkan Objek di akhir kalimat -> "the dishes".\nHasil susunan kalimat yang benar: "I wash the dishes."',
-          trapWarning:
-            'Jangan lupa memulai kalimat dengan huruf kapital "I" dan meletakkan kata "the" sebelum kata benda "dishes"!'
-        },
-        {
-          id: 'q10',
           type: 'essay',
           unit: 'Unit 4: Prepositions (in / on)',
           visualEmoji: '🍎 ➡️ 🧺',
           visualCaption: 'Gambar sebuah apel merah berada DI DALAM sebuah keranjang rotan.',
-          question:
-            'Look at the picture! Complete the sentence with "in" or "on":\n"The apple is ... the basket."',
+          question: 'Complete the sentence with "in" or "on":\n"The apple is ... the basket."',
           sampleAnswer: 'in',
           correctAnswer: 'in',
           explanation:
-            'Langkah 1: Amati ilustrasi posisi buah apel terhadap keranjang ("basket").\nLangkah 2: Apel berada di dalam ruang keranjang, bukan di atas tutupnya.\nLangkah 3: Preposisi untuk "di dalam" adalah "in", sehingga menjadi "The apple is in the basket."',
+            'Langkah 1: Apel berada di dalam keranjang.\nLangkah 2: Kata depan untuk "di dalam" adalah "in".',
           trapWarning:
-            'Ingat! Benda yang masuk ke dalam wadah (kotak, tas, keranjang) selalu memakai kata depan "in", bukan "on".'
+            'Gunakan "in" untuk benda yang berada di dalam wadah.'
         }
       ]
     };
@@ -284,7 +197,6 @@
             if (!response.ok) {
               const errData = await response.json().catch(() => ({}));
               const msg = errData?.error?.message || `HTTP ${response.status}`;
-              // Jika model tidak tersedia / deprecated (404/400), langsung coba model berikutnya
               if (response.status === 404 || msg.toLowerCase().includes('no longer available')) {
                 lastError = new Error(msg);
                 break;
@@ -331,6 +243,8 @@
         return [DEFAULT_BUILTIN_PACKAGE];
       });
 
+      const [cloudConnected, setCloudConnected] = useState(false);
+
       const [xpStars, setXpStars] = useState(() => {
         return Number(localStorage.getItem('juarakelas_xp') || '150');
       });
@@ -340,6 +254,116 @@
           localStorage.setItem('juarakelas_packages_v1', JSON.stringify(packages));
         } catch (e) {}
       }, [packages]);
+
+      // Sinkronisasi Real-Time dengan Firestore Cloud agar soal dari PC muncul di iPad
+      useEffect(() => {
+        if (!firestoreDb) return;
+
+        let unsubscribe = () => {};
+        try {
+          unsubscribe = firestoreDb
+            .collection('juarakelas_packages')
+            .orderBy('createdAt', 'desc')
+            .onSnapshot(
+              (snapshot) => {
+                setCloudConnected(true);
+                const cloudList = [];
+                snapshot.forEach((doc) => {
+                  const data = doc.data();
+                  if (data && Array.isArray(data.questions)) {
+                    cloudList.push({
+                      ...data,
+                      id: data.id || doc.id
+                    });
+                  }
+                });
+
+                setPackages((prevLocal) => {
+                  const mapById = new Map();
+                  mapById.set(DEFAULT_BUILTIN_PACKAGE.id, DEFAULT_BUILTIN_PACKAGE);
+                  prevLocal.forEach((p) => mapById.set(p.id, p));
+                  cloudList.forEach((c) => mapById.set(c.id, c));
+
+                  return Array.from(mapById.values()).sort(
+                    (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+                  );
+                });
+              },
+              () => {
+                setCloudConnected(false);
+              }
+            );
+        } catch (e) {
+          setCloudConnected(false);
+        }
+
+        return () => {
+          try {
+            unsubscribe();
+          } catch (e) {}
+        };
+      }, []);
+
+      const savePackageToCloud = async (pkgObj) => {
+        setPackages((prev) => [pkgObj, ...prev.filter((p) => p.id !== pkgObj.id)]);
+        if (!firestoreDb) return;
+        try {
+          await firestoreDb.collection('juarakelas_packages').doc(pkgObj.id).set(pkgObj);
+        } catch (e) {}
+      };
+
+      const deletePackageFromCloud = async (pkgId) => {
+        setPackages((prev) => prev.filter((p) => p.id !== pkgId));
+        if (!firestoreDb) return;
+        try {
+          await firestoreDb.collection('juarakelas_packages').doc(pkgId).delete();
+        } catch (e) {}
+      };
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('juarakelas_packages_v1', JSON.stringify(packages));
+        } catch (e) {}
+      }, [packages]);
+
+      // Sinkronisasi Real-Time Cloud Firestore agar soal dari PC langsung muncul di iPad
+      useEffect(() => {
+        if (!firestoreDb) return;
+        const unsubscribe = firestoreDb
+          .collection(CLOUD_COLLECTION)
+          .onSnapshot(
+            (snapshot) => {
+              setCloudConnected(true);
+              const cloudPkgs = [];
+              snapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data && data.id && Array.isArray(data.questions)) {
+                  cloudPkgs.push(data);
+                }
+              });
+
+              setPackages((prevLocal) => {
+                const mapById = new Map();
+                mapById.set(DEFAULT_BUILTIN_PACKAGE.id, DEFAULT_BUILTIN_PACKAGE);
+                prevLocal.forEach((p) => {
+                  if (p && p.id) mapById.set(p.id, p);
+                });
+                cloudPkgs.forEach((cp) => {
+                  if (cp && cp.id) mapById.set(cp.id, cp);
+                });
+
+                const merged = Array.from(mapById.values());
+                merged.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                return merged;
+              });
+            },
+            () => {
+              setCloudConnected(false);
+            }
+          );
+
+        return () => unsubscribe();
+      }, []);
 
       useEffect(() => {
         localStorage.setItem('juarakelas_xp', String(xpStars));
@@ -636,14 +660,14 @@ ${kisiKisiText.slice(0, 28000)}`;
             questions: normalizedQuestions
           };
 
-          setPackages((prev) => [newPackageObj, ...prev]);
+          await savePackageToCloud(newPackageObj);
           setSelectedGrade(Number(genGrade));
           setSelectedSemester(Number(genSemester));
           setShowUploadModal(false);
           setActiveView('library');
 
           triggerToast(
-            `Hore! Paket soal tersimpan di Kelas ${genGrade} • Semester ${genSemester}!`,
+            `Hore! Paket soal tersimpan di Cloud & Kelas ${genGrade} • Semester ${genSemester}!`,
             'success'
           );
         } catch (err) {
@@ -810,7 +834,7 @@ Aturan penilaian fleksibel:
         if (finalScore > prevBest) {
           const updatedPkg = { ...activePackage, bestScore: finalScore };
           setActivePackage(updatedPkg);
-          setPackages((prev) => prev.map((p) => (p.id === updatedPkg.id ? updatedPkg : p)));
+          await savePackageToCloud(updatedPkg);
         }
 
         setGradingResults({
@@ -873,6 +897,11 @@ Aturan penilaian fleksibel:
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
                       ⭐ {xpStars} XP
                     </span>
+                    {cloudConnected && (
+                      <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                        ☁️ Cloud Sync
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs font-semibold text-slate-500">
                     {activeView === 'library'
@@ -1765,10 +1794,10 @@ Aturan penilaian fleksibel:
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setPackages((prev) => prev.filter((p) => p.id !== packageToDelete.id));
+                    onClick={async () => {
+                      await deletePackageFromCloud(packageToDelete.id);
                       setPackageToDelete(null);
-                      triggerToast('Paket soal dihapus.', 'info');
+                      triggerToast('Paket soal dihapus dari cloud.', 'info');
                     }}
                     className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-extrabold text-sm"
                   >
