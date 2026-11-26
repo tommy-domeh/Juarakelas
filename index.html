@@ -413,6 +413,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
       const [activeView, setActiveView] = useState('library');
       const isHandlingPopStateRef = useRef(false);
+      const lastPopStateTimeRef = useRef(0);
 
       const triggerToast = (msg, type = 'info') => {
         setToastMessage({ msg, type });
@@ -578,6 +579,12 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         }
 
         const handlePopState = () => {
+          // Pengaman khusus Safari iPad: abaikan event popstate ganda dalam < 350ms
+          const now = Date.now();
+          if (now - lastPopStateTimeRef.current < 350) {
+            return;
+          }
+          lastPopStateTimeRef.current = now;
           isHandlingPopStateRef.current = true;
 
           // 1. Tutup modal yang sedang terbuka terlebih dahulu
@@ -604,6 +611,8 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
               setIsTimerRunning(false);
               setActiveView('library');
               if (lastChoicePackageRef.current) {
+                // Dorong state modal ke history agar tombol Back berikutnya di iPad menutup modal dengan rapi
+                window.history.pushState({ juarakelas: true, modal: true }, '');
                 setPackageChoiceModal(lastChoicePackageRef.current);
               }
             }
@@ -611,7 +620,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
           setTimeout(() => {
             isHandlingPopStateRef.current = false;
-          }, 50);
+          }, 120);
         };
 
         window.addEventListener('popstate', handlePopState);
