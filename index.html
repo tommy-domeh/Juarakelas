@@ -540,20 +540,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         } catch (e) {}
       }, [packages]);
 
-      useEffect(() => {
-        if (!timerEnabled || !isTimerRunning || activeView !== 'quiz') return;
-        if (timeLeftSeconds <= 0) {
-          setIsTimerRunning(false);
-          handleFinalizeAndGradeExam();
-          return;
-        }
-        const interval = setInterval(() => {
-          setTimeLeftSeconds((prev) => Math.max(0, prev - 1));
-        }, 1000);
-        return () => clearInterval(interval);
-      }, [timerEnabled, isTimerRunning, timeLeftSeconds, activeView]);
-
-      // Sinkronisasi tombol Back browser / HP / iPad agar tidak langsung keluar app
+      // Sinkronisasi tombol Back browser / HP / iPad agar mundur bertahap ke halaman/soal sebelumnya
       useEffect(() => {
         if (!window.history.state || !window.history.state.juarakelas) {
           window.history.replaceState({ juarakelas: true, view: 'library' }, '');
@@ -562,7 +549,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         const handlePopState = () => {
           isHandlingPopStateRef.current = true;
 
-          // 1. Tutup modal yang sedang terbuka terlebih dahulu jika ada
+          // 1. Tutup modal yang sedang terbuka terlebih dahulu
           if (showSubmitConfirm) {
             setShowSubmitConfirm(false);
           } else if (packageChoiceModal) {
@@ -575,10 +562,17 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             setShowAdminPanelModal(false);
           } else if (showAdminLoginModal) {
             setShowAdminLoginModal(false);
-          } else if (activeView !== 'library') {
-            // 2. Jika berada di halaman Kuis atau Hasil Nilai, kembali ke Beranda Daftar Paket
-            setIsTimerRunning(false);
-            setActiveView('library');
+          } else if (activeView === 'results') {
+            // 2. Dari halaman Hasil Nilai -> mundur ke halaman Kuis sebelumnya
+            setActiveView('quiz');
+          } else if (activeView === 'quiz') {
+            // 3. Di dalam Kuis -> mundur ke soal sebelumnya dulu, baru ke Daftar Paket jika sudah di Soal No. 1
+            if (currentIdx > 0) {
+              setCurrentIdx((prev) => Math.max(0, prev - 1));
+            } else {
+              setIsTimerRunning(false);
+              setActiveView('library');
+            }
           }
 
           setTimeout(() => {
@@ -590,6 +584,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         return () => window.removeEventListener('popstate', handlePopState);
       }, [
         activeView,
+        currentIdx,
         showSubmitConfirm,
         packageChoiceModal,
         packageToDelete,
@@ -600,10 +595,18 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       ]);
 
       const navigateToView = (targetView) => {
-        if (targetView !== 'library' && activeView === 'library' && !isHandlingPopStateRef.current) {
+        if (targetView !== activeView && !isHandlingPopStateRef.current) {
           window.history.pushState({ juarakelas: true, view: targetView }, '');
         }
         setActiveView(targetView);
+      };
+
+      const goToQuestionIndex = (nextIdx) => {
+        const boundedIdx = Math.min(activePackage.questions.length - 1, Math.max(0, nextIdx));
+        if (boundedIdx !== currentIdx && !isHandlingPopStateRef.current) {
+          window.history.pushState({ juarakelas: true, view: 'quiz', qIdx: boundedIdx }, '');
+        }
+        setCurrentIdx(boundedIdx);
       };
 
       const openModalWithHistory = (setter, value) => {
@@ -1718,7 +1721,7 @@ ${referenceOutline}`;
                       <button
                         type="button"
                         disabled={currentIdx === 0}
-                        onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
+                        onClick={() => goToQuestionIndex(currentIdx - 1)}
                         className="px-4 py-2.5 rounded-xl font-bold text-sm border-2 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
                       >
                         ← Sebelumnya
@@ -1744,11 +1747,7 @@ ${referenceOutline}`;
                       {currentIdx < activePackage.questions.length - 1 ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            setCurrentIdx((prev) =>
-                              Math.min(activePackage.questions.length - 1, prev + 1)
-                            )
-                          }
+                          onClick={() => goToQuestionIndex(currentIdx + 1)}
                           className="px-5 py-2.5 rounded-xl font-bold text-sm bg-slate-900 text-white hover:bg-slate-800"
                         >
                           Selanjutnya →
@@ -1756,7 +1755,7 @@ ${referenceOutline}`;
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setShowSubmitConfirm(true)}
+                          onClick={() => openModalWithHistory(setShowSubmitConfirm, true)}
                           className="px-5 py-2.5 rounded-xl font-extrabold text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-md"
                         >
                           ✅ Kumpulkan & Cek Nilai
@@ -1794,7 +1793,7 @@ ${referenceOutline}`;
                           <button
                             key={q.id}
                             type="button"
-                            onClick={() => setCurrentIdx(idx)}
+                            onClick={() => goToQuestionIndex(idx)}
                             className={`h-11 rounded-xl font-extrabold text-sm border transition-all flex items-center justify-center ${btnStyle} ${
                               isCurrent ? 'ring-4 ring-amber-300/70 scale-105 z-10' : ''
                             }`}
@@ -1807,7 +1806,7 @@ ${referenceOutline}`;
 
                     <button
                       type="button"
-                      onClick={() => setShowSubmitConfirm(true)}
+                      onClick={() => openModalWithHistory(setShowSubmitConfirm, true)}
                       className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-sm sm:text-base shadow-lg"
                     >
                       ✅ Kumpulkan & Cek Nilai
