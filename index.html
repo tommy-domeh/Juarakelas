@@ -1189,11 +1189,12 @@ Aturan penilaian fleksibel:
                           >
                             ▶️ Mulai Latihan
                           </button>
-                          {!pkg.isBuiltin && (
+                          {isAdminUnlocked && !pkg.isBuiltin && (
                             <button
                               type="button"
                               onClick={() => setPackageToDelete(pkg)}
                               className="p-3 rounded-2xl border-2 border-rose-100 text-rose-500 hover:bg-rose-50 font-bold text-xs"
+                              title="Hapus paket soal (Khusus Admin)"
                             >
                               🗑️
                             </button>
@@ -1856,7 +1857,7 @@ Aturan penilaian fleksibel:
           )}
 
           {/* MODAL KONFIRMASI HAPUS */}
-          {packageToDelete && (
+          {packageToDelete && isAdminUnlocked && (
             <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-white rounded-3xl max-w-md w-full p-6 border-2 border-rose-100 shadow-2xl text-center">
                 <h3 className="text-lg font-extrabold text-slate-900 mb-2">Hapus Paket Soal Ini?</h3>
@@ -1874,6 +1875,7 @@ Aturan penilaian fleksibel:
                   <button
                     type="button"
                     onClick={async () => {
+                      if (!isAdminUnlocked) return;
                       const targetId = packageToDelete.id;
                       setPackages((prev) => prev.filter((p) => p.id !== targetId));
                       setPackageToDelete(null);
