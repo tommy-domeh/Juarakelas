@@ -37,21 +37,6 @@
     // ========================================================================
     // PAKET SOAL BAWAAN (KELAS 2 - SEMESTER 1 - BAHASA INGGRIS)
     // ========================================================================
-    const DEFAULT_KISI_KISI = `KISI-KISI ASESMEN SUMATIF AKHIR SEMESTER (ASAS)
-SEKOLAH AL-QUR'AN THALHAH BIN UBAIDILLAH (S.A.T.U.) ISLAMIC SCHOOL
-Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
-
-1. Unit 1 (Family Members): Disajikan ilustrasi gambar kakek, peserta didik dapat menentukan kosakata anggota keluarga yang tepat.
-2. Unit 1 (Introducing Family): Disajikan dialog anak memperkenalkan anggota keluarganya, peserta didik dapat melengkapi dialog tersebut sesuai konteks.
-3. Unit 1 (Adab to Parents - Birrul Walidain): Disajikan situasi interaksi dengan orang tua, peserta didik dapat menerapkan adab berbicara yang baik.
-4. Unit 2 (Animals & Expressing Admiration): Disajikan ilustrasi anak melihat hewan ciptaan Allah, peserta didik dapat menentukan kalimat thayyibah (MasyaAllah) yang tepat.
-5. Unit 2 (Sirah Animals): Disajikan pernyataan singkat mengenai kisah Gua Tsur, peserta didik dapat mengidentifikasi hewan yang membantu Rasulullah SAW (laba-laba / spider & merpati / dove).
-6. Unit 3 (Helping at Home & Polite Words): Disajikan aktivitas membantu di rumah dan dialog ucapan terima kasih, peserta didik dapat memilih respons santun yang sesuai.
-7. Unit 4 (Rooms in the House & Prepositions in/on): Disajikan posisi benda di ruangan, peserta didik dapat menentukan preposisi tempat yang tepat (in/on).
-8. Unit 2 (Sentence Structure a/an + adjective): Disajikan gambar seekor hewan, peserta didik melengkapi kalimat deskripsi hewan dengan artikel a/an yang tepat.
-9. Unit 3 (Sentence Building - Word Order): Disajikan kata-kata acak tentang mencuci piring, peserta didik menyusunnya menjadi kalimat yang benar.
-10. Unit 4 (Prepositions in/on): Disajikan gambar apel di dalam keranjang, peserta didik dapat menuliskan kalimat/preposisi yang tepat.`;
-
     const DEFAULT_BUILTIN_PACKAGE = {
       id: 'builtin_kls2_sem1_english',
       isBuiltin: true,
@@ -69,7 +54,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           unit: 'Unit 1: Family Members',
           visualEmoji: '👴👓🦯',
           visualCaption: 'Ilustrasi gambar seorang kakek yang ramah berambut putih sedang tersenyum.',
-          question: 'Look at the picture! He is my father’s father. Who is he?',
+          question: "Look at the picture! He is my father's father. Who is he?",
           options: [
             { key: 'A', text: 'Grandmother' },
             { key: 'B', text: 'Grandfather' },
@@ -78,7 +63,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           ],
           correctAnswer: 'B',
           explanation:
-            'Langkah 1: Perhatikan petunjuk "my father’s father" (ayah dari ayahku) dan gambar seorang kakek.\nLangkah 2: Dalam Bahasa Inggris, kakek adalah "Grandfather", sedangkan nenek adalah "Grandmother".\nLangkah 3: Maka jawaban yang tepat adalah B. Grandfather.',
+            'Langkah 1: Perhatikan petunjuk "my father\'s father" (ayah dari ayahku) dan gambar seorang kakek.\nLangkah 2: Dalam Bahasa Inggris, kakek adalah "Grandfather", sedangkan nenek adalah "Grandmother".\nLangkah 3: Maka jawaban yang tepat adalah B. Grandfather.',
           trapWarning:
             'Jangan tertukar antara "Grandfather" (kakek) dan "Grandmother" (nenek)! Perhatikan juga kata ganti "He" (dia laki-laki) pada soal.'
         },
@@ -114,7 +99,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             { key: 'A', text: 'No, I am busy' },
             { key: 'B', text: 'Yes, certainly' },
             { key: 'C', text: 'Go away' },
-            { key: 'D', text: 'I don’t care' }
+            { key: 'D', text: "I don't care" }
           ],
           correctAnswer: 'B',
           explanation:
@@ -249,9 +234,12 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
     };
 
     // ========================================================================
-    // HELPER: EKSTRAK TEKS DARI PDF
+    // HELPER: EKSTRAK TEKS DARI FILE PDF MULTI-HALAMAN
     // ========================================================================
     async function extractTextFromPdfFile(file) {
+      if (!window.pdfjsLib) {
+        throw new Error('Pustaka pembaca PDF belum siap, silakan muat ulang halaman.');
+      }
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const totalPages = pdf.numPages;
@@ -264,39 +252,61 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         fullText += `\n--- Halaman ${pageNum} ---\n` + pageStrings.join(' ');
       }
 
-      return { text: fullText.trim(), numPages: totalPages };
+      return {
+        text: fullText.trim(),
+        numPages: totalPages
+      };
     }
 
     // ========================================================================
-    // HELPER: PANGGIL GEMINI API DENGAN RETRY
+    // HELPER: PANGGIL GEMINI API DENGAN RETRY & AUTO-FALLBACK MODEL TERBARU
     // ========================================================================
-    async function fetchGeminiWithRetry(apiKey, payload, maxRetries = 3) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
-      let delay = 1000;
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+    async function fetchGeminiWithRetry(apiKey, payload, maxRetries = 2) {
+      const candidateModels = [
+        'gemini-3-flash-preview',
+        'gemini-3.8-flash',
+        'gemini-2.5-flash-lite'
+      ];
+      let lastError = new Error('Gagal menghubungi Gemini API');
 
-          if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            const msg = errData?.error?.message || `HTTP ${response.status}`;
-            if (response.status === 429 || response.status >= 500) {
+      for (const modelName of candidateModels) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        let delay = 800;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              const errData = await response.json().catch(() => ({}));
+              const msg = errData?.error?.message || `HTTP ${response.status}`;
+              // Jika model tidak tersedia / deprecated (404/400), langsung coba model berikutnya
+              if (response.status === 404 || msg.toLowerCase().includes('no longer available')) {
+                lastError = new Error(msg);
+                break;
+              }
+              if (response.status === 429 || response.status >= 500) {
+                throw new Error(msg);
+              }
               throw new Error(msg);
             }
-            throw new Error(msg);
-          }
 
-          return await response.json();
-        } catch (err) {
-          if (attempt === maxRetries) throw err;
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          delay *= 2;
+            return await response.json();
+          } catch (err) {
+            lastError = err;
+            if (attempt < maxRetries) {
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              delay *= 2;
+            }
+          }
         }
       }
+
+      throw lastError;
     }
 
     // ========================================================================
