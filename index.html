@@ -22,6 +22,11 @@
   <style>
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button, a, select, textarea, input {
+      touch-action: manipulation;
     }
     .starry-night-bg {
       background-color: #161836;
@@ -33,7 +38,6 @@
         radial-gradient(circle at 12% 76%, rgba(255, 255, 255, 0.3) 1px, transparent 1.5px),
         radial-gradient(circle at 60% 82%, rgba(255, 255, 255, 0.25) 1px, transparent 1.5px),
         radial-gradient(ellipse at 50% 0%, #2a2863 0%, #191a3e 55%, #11122b 100%);
-      background-attachment: fixed;
     }
   </style>
 </head>
@@ -630,7 +634,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
           setTimeout(() => {
             isHandlingPopStateRef.current = false;
-          }, 120);
+          }, 0);
         };
 
         window.addEventListener('popstate', handlePopState);
@@ -1333,7 +1337,7 @@ ${referenceOutline}`;
         <div className="min-h-screen flex flex-col justify-between">
           <div className="pb-14">
             {/* TOP HEADER */}
-            <header className="sticky top-0 z-30 bg-[#1a1c42]/75 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-black/20">
+            <header className="sticky top-0 z-30 bg-[#1a1c42]/90 backdrop-blur-md border-b border-white/10 shadow-lg shadow-black/20">
               <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
@@ -1427,7 +1431,7 @@ ${referenceOutline}`;
             {/* VIEW 1: LIBRARY PER KELAS & SEMESTER */}
             {activeView === 'library' && (
               <main className="max-w-6xl mx-auto px-4 pt-7 space-y-6">
-                <div className="bg-white/[0.08] backdrop-blur-xl rounded-3xl border border-white/15 shadow-xl p-5 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                <div className="bg-white/[0.09] backdrop-blur-md rounded-3xl border border-white/15 shadow-xl p-5 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
                   <div className="space-y-2">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-amber-200 border border-white/15 text-xs font-extrabold tracking-wide">
                       <span>✨ Belajar Ceria Berbasis Kisi-Kisi Sekolah</span>
@@ -1457,7 +1461,7 @@ ${referenceOutline}`;
                 </div>
 
                 {/* FILTER KELAS 1-6 & SEMESTER 1-2 */}
-                <div className="bg-white/[0.08] backdrop-blur-xl rounded-3xl border border-white/15 shadow-xl p-5 space-y-5">
+                <div className="bg-white/[0.09] backdrop-blur-md rounded-3xl border border-white/15 shadow-xl p-5 space-y-5">
                   <div>
                     <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200/80 block mb-2.5">
                       1. Pilih Jenjang Kelas SD:
@@ -1815,7 +1819,7 @@ ${referenceOutline}`;
                   </div>
 
                   {/* PANEL NAVIGASI NOMOR SOAL */}
-                  <aside className="lg:col-span-4 bg-white/[0.08] backdrop-blur-xl text-white rounded-3xl border border-white/15 shadow-xl p-5 sm:p-6 sticky top-24">
+                  <aside className="lg:col-span-4 bg-white/[0.09] backdrop-blur-md text-white rounded-3xl border border-white/15 shadow-xl p-5 sm:p-6 sticky top-24">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="font-extrabold text-base text-white">
                         🧭 Navigasi Nomor Soal
@@ -2040,7 +2044,7 @@ ${referenceOutline}`;
 
             {/* MODAL PILIH SOAL LAMA VS SOAL BARU */}
             {packageChoiceModal && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4">
                 <div className="bg-[#fffdf7] text-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-amber-200 shadow-2xl space-y-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
