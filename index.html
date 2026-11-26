@@ -414,6 +414,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [activeView, setActiveView] = useState('library');
       const isHandlingPopStateRef = useRef(false);
       const lastPopStateTimeRef = useRef(0);
+      const backPressWarningRef = useRef({ active: false, timer: null });
 
       const triggerToast = (msg, type = 'info') => {
         setToastMessage({ msg, type });
@@ -604,12 +605,29 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             // 2. Dari halaman Hasil Nilai -> mundur ke halaman Kuis sebelumnya
             setActiveView('quiz');
           } else if (activeView === 'quiz') {
-            // 3. Dari halaman Soal -> langsung keluar ke Pilih Versi Soal (jika ada) atau Daftar Paket
-            setIsTimerRunning(false);
-            setActiveView('library');
-            if (lastChoicePackageRef.current) {
-              window.history.pushState({ juarakelas: true, modal: true }, '');
-              setPackageChoiceModal(lastChoicePackageRef.current);
+            // 3. Saat di halaman Soal: butuh tekan Back 2x dalam 3 detik sambil menampilkan peringatan
+            if (!backPressWarningRef.current.active) {
+              backPressWarningRef.current.active = true;
+              window.history.pushState({ juarakelas: true, view: 'quiz', guard: true }, '');
+              triggerToast('Tekan Back sekali lagi untuk keluar dari latihan soal!', 'warning');
+
+              if (backPressWarningRef.current.timer) {
+                clearTimeout(backPressWarningRef.current.timer);
+              }
+              backPressWarningRef.current.timer = setTimeout(() => {
+                backPressWarningRef.current.active = false;
+              }, 3000);
+            } else {
+              backPressWarningRef.current.active = false;
+              if (backPressWarningRef.current.timer) {
+                clearTimeout(backPressWarningRef.current.timer);
+              }
+              setIsTimerRunning(false);
+              setActiveView('library');
+              if (lastChoicePackageRef.current) {
+                window.history.pushState({ juarakelas: true, modal: true }, '');
+                setPackageChoiceModal(lastChoicePackageRef.current);
+              }
             }
           }
 
