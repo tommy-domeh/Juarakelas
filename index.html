@@ -413,6 +413,36 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
       const [activeView, setActiveView] = useState('library');
       const isHandlingPopStateRef = useRef(false);
+
+      const triggerToast = (msg, type = 'info') => {
+        setToastMessage({ msg, type });
+        setTimeout(() => {
+          setToastMessage(null);
+        }, 3800);
+      };
+
+      const navigateToView = (targetView) => {
+        setActiveView(targetView);
+        if (!isHandlingPopStateRef.current) {
+          window.history.pushState({ juarakelas: true, view: targetView }, '');
+        }
+      };
+
+      const openModalWithHistory = (setterFn, value) => {
+        setterFn(value);
+        if (!isHandlingPopStateRef.current) {
+          window.history.pushState({ juarakelas: true, modal: true }, '');
+        }
+      };
+
+      const goToQuestionIndex = (nextIdx) => {
+        const clamped = Math.min(activePackage.questions.length - 1, Math.max(0, nextIdx));
+        setCurrentIdx(clamped);
+        if (!isHandlingPopStateRef.current) {
+          window.history.pushState({ juarakelas: true, view: 'quiz', idx: clamped }, '');
+        }
+      };
+
       const [xpStars, setXpStars] = useState(() => {
         const saved = localStorage.getItem(STORAGE_XP_KEY);
         return saved ? Number(saved) : 150;
@@ -491,6 +521,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [activePackage, setActivePackage] = useState(DEFAULT_BUILTIN_PACKAGE);
       const [packageToDelete, setPackageToDelete] = useState(null);
       const [packageChoiceModal, setPackageChoiceModal] = useState(null);
+      const lastChoicePackageRef = useRef(null);
 
       // Quiz Session State
       const [currentIdx, setCurrentIdx] = useState(0);
@@ -566,12 +597,15 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             // 2. Dari halaman Hasil Nilai -> mundur ke halaman Kuis sebelumnya
             setActiveView('quiz');
           } else if (activeView === 'quiz') {
-            // 3. Di dalam Kuis -> mundur ke soal sebelumnya dulu, baru ke Daftar Paket jika sudah di Soal No. 1
+            // 3. Di dalam Kuis -> mundur ke soal sebelumnya dulu, lalu ke Pilih Versi Soal (jika ada) atau Daftar Paket
             if (currentIdx > 0) {
               setCurrentIdx((prev) => Math.max(0, prev - 1));
             } else {
               setIsTimerRunning(false);
               setActiveView('library');
+              if (lastChoicePackageRef.current) {
+                setPackageChoiceModal(lastChoicePackageRef.current);
+              }
             }
           }
 
@@ -594,32 +628,18 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         showAdminLoginModal
       ]);
 
-      const navigateToView = (targetView) => {
-        if (targetView !== activeView && !isHandlingPopStateRef.current) {
-          window.history.pushState({ juarakelas: true, view: targetView }, '');
+      useEffect(() => {
+        if (!timerEnabled || !isTimerRunning || activeView !== 'quiz') return;
+        if (timeLeftSeconds <= 0) {
+          setIsTimerRunning(false);
+          handleFinalizeAndGradeExam();
+          return;
         }
-        setActiveView(targetView);
-      };
-
-      const goToQuestionIndex = (nextIdx) => {
-        const boundedIdx = Math.min(activePackage.questions.length - 1, Math.max(0, nextIdx));
-        if (boundedIdx !== currentIdx && !isHandlingPopStateRef.current) {
-          window.history.pushState({ juarakelas: true, view: 'quiz', qIdx: boundedIdx }, '');
-        }
-        setCurrentIdx(boundedIdx);
-      };
-
-      const openModalWithHistory = (setter, value) => {
-        if (!isHandlingPopStateRef.current) {
-          window.history.pushState({ juarakelas: true, modal: true }, '');
-        }
-        setter(value);
-      };
-
-      const triggerToast = (msg, type = 'info') => {
-        setToastMessage({ msg, type });
-        setTimeout(() => setToastMessage(null), 3800);
-      };
+        const interval = setInterval(() => {
+          setTimeLeftSeconds((prev) => Math.max(0, prev - 1));
+        }, 1000);
+        return () => clearInterval(interval);
+      }, [timerEnabled, isTimerRunning, timeLeftSeconds, activeView]);
 
       const formatTime = (secs) => {
         const m = Math.floor(secs / 60);
@@ -637,6 +657,54 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         } else {
           setIsTimerRunning(false);
           triggerToast('Mode Santai aktif! Belajar tenang tanpa batas waktu.', 'success');
+        }
+      };
+
+      const handleStartPackage = (pkg, fromChoiceModal = false) => {
+        if (!fromChoiceModal) {
+          lastChoicePackageRef.current = null;
+        }
+        setPackageChoiceModal(null);
+        setActivePackage(pkg);
+        setAnswers({});
+        setUnsureFlags({});
+        setCurrentIdx(0);
+        setGradingResults(null);
+        setShowSubmitConfirm(false);
+        setQuizStartTime(Date.now());
+        setTimeLeftSeconds(15 * 60);
+        setIsTimerRunning(timerEnabled);
+        navigateToView('quiz');
+      };
+
+      const handleClickStartButton = (pkg) => {
+        const isCompletedOnce = pkg.bestScore !== null && pkg.bestScore !== undefined;
+        const hasVariationSet = Boolean(
+          pkg.variationQuestions && pkg.variationQuestions.length > 0
+        );
+
+        if (hasVariationSet || (isAdminUnlocked && isCompletedOnce)) {
+          lastChoicePackageRef.current = pkg;
+          openModalWithHistory(setPackageChoiceModal, pkg);
+        } else {
+          lastChoicePackageRef.current = null;
+          handleStartPackage(pkg, false);
+        }
+      };
+
+      const handleStartSelectedVersion = (pkg, mode) => {
+        lastChoicePackageRef.current = pkg;
+        if (mode === 'new' && pkg.variationQuestions && pkg.variationQuestions.length > 0) {
+          handleStartPackage(
+            {
+              ...pkg,
+              title: `${pkg.title} (Soal Baru)`,
+              questions: pkg.variationQuestions
+            },
+            true
+          );
+        } else {
+          handleStartPackage(pkg, true);
         }
       };
 
@@ -716,45 +784,6 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           triggerToast(`Berhasil mengirim ${successCount} paket soal ke Cloud iPad!`, 'success');
         } else {
           triggerToast(`Sebagian gagal (${lastReason}). Cek Firestore Rules ya!`, 'warning');
-        }
-      };
-
-      const handleStartPackage = (pkg) => {
-        setPackageChoiceModal(null);
-        setActivePackage(pkg);
-        setAnswers({});
-        setUnsureFlags({});
-        setCurrentIdx(0);
-        setGradingResults(null);
-        setShowSubmitConfirm(false);
-        setQuizStartTime(Date.now());
-        setTimeLeftSeconds(15 * 60);
-        setIsTimerRunning(timerEnabled);
-        navigateToView('quiz');
-      };
-
-      const handleClickStartButton = (pkg) => {
-        const isCompletedOnce = pkg.bestScore !== null && pkg.bestScore !== undefined;
-        const hasVariationSet = Boolean(
-          pkg.variationQuestions && pkg.variationQuestions.length > 0
-        );
-
-        if (hasVariationSet || (isAdminUnlocked && isCompletedOnce)) {
-          openModalWithHistory(setPackageChoiceModal, pkg);
-        } else {
-          handleStartPackage(pkg);
-        }
-      };
-
-      const handleStartSelectedVersion = (pkg, mode) => {
-        if (mode === 'new' && pkg.variationQuestions && pkg.variationQuestions.length > 0) {
-          handleStartPackage({
-            ...pkg,
-            title: `${pkg.title} (Soal Baru)`,
-            questions: pkg.variationQuestions
-          });
-        } else {
-          handleStartPackage(pkg);
         }
       };
 
@@ -1080,6 +1109,9 @@ ${referenceOutline}`;
           );
           if (activePackage.id === updatedParentPkg.id) {
             setActivePackage(updatedParentPkg);
+          }
+          if (lastChoicePackageRef.current && lastChoicePackageRef.current.id === updatedParentPkg.id) {
+            lastChoicePackageRef.current = updatedParentPkg;
           }
 
           if (!updatedParentPkg.isBuiltin) {
@@ -2278,7 +2310,7 @@ ${referenceOutline}`;
                       onClick={handleManualSyncToCloud}
                       className="py-3 px-4 rounded-2xl border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-900 font-extrabold text-xs sm:text-sm"
                     >
-                      ☁️ Sync iPad
+                      ☁️ Sync ke Cloud iPad
                     </button>
                     <button
                       type="button"
@@ -2286,24 +2318,24 @@ ${referenceOutline}`;
                         setShowAdminPanelModal(false);
                         openUploadModalForCurrentFilter();
                       }}
-                      className="py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs sm:text-sm shadow-md"
+                      className="py-3 px-4 rounded-2xl border-2 border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-900 font-extrabold text-xs sm:text-sm"
                     >
-                      📄 + Upload PDF Kisi-Kisi
+                      📄 + Upload PDF Baru
                     </button>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={handleLockAdmin}
-                      className="px-4 py-2 rounded-xl border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs"
+                      className="px-4 py-2.5 rounded-xl border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-extrabold text-xs sm:text-sm"
                     >
                       🔒 Kunci Menu Admin
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowAdminPanelModal(false)}
-                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                      className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs sm:text-sm"
                     >
                       Tutup
                     </button>
@@ -2312,23 +2344,23 @@ ${referenceOutline}`;
               </div>
             )}
 
-            {/* MODAL UPLOAD PDF */}
-            {showUploadModal && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-                <div className="bg-white text-slate-800 rounded-3xl max-w-3xl w-full p-5 sm:p-8 border-2 border-indigo-100 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
-                  <div className="flex items-start justify-between gap-4 pb-4 mb-5 border-b-2 border-slate-100">
+            {/* MODAL UPLOAD PDF & GENERATOR SOAL */}
+            {showUploadModal && isAdminUnlocked && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-2xl w-full p-6 border-2 border-indigo-100 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                     <div>
-                      <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
-                        📄 Upload Kisi-Kisi PDF & Buat Paket Soal AI
-                      </h2>
-                      <p className="text-xs sm:text-sm text-slate-500">
-                        Simpan paket soal terorganisir per Kelas & Semester.
+                      <h3 className="text-lg font-extrabold text-slate-900">
+                        📄 Upload PDF Kisi-Kisi & Buat Soal AI
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Otomatis tersimpan ke perangkat ini & Cloud Firestore iPad.
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => !isGenerating && setShowUploadModal(false)}
-                      className="px-3 py-1 rounded-xl text-slate-500 hover:bg-slate-100 font-bold"
+                      className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
                     >
                       ✕
                     </button>
