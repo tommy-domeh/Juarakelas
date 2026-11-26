@@ -604,10 +604,14 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           } else if (showAdminLoginModal) {
             setShowAdminLoginModal(false);
           } else if (activeView === 'results') {
-            // 2. Dari halaman Hasil Nilai -> mundur ke halaman Kuis sebelumnya
-            setActiveView('quiz');
+            // 2. Tugas sudah ada nilai -> kembali langsung ke Menu Pilihan Soal (jika tersedia)
+            setActiveView('library');
+            if (lastChoicePackageRef.current) {
+              window.history.pushState({ juarakelas: true, modal: true }, '');
+              setPackageChoiceModal(lastChoicePackageRef.current);
+            }
           } else if (activeView === 'quiz') {
-            // Simpan progres soal saat ini selama 2 menit jika tidak sengaja ter-swipe keluar
+            // Simpan progres soal saat ini selama 30 detik jika tidak sengaja ter-swipe keluar
             savedQuizSessionRef.current = {
               pkg: activePackage,
               currentIdx,
@@ -622,14 +626,14 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             }
             savedSessionTimerRef.current = setTimeout(() => {
               savedQuizSessionRef.current = null;
-            }, 2 * 60 * 1000);
+            }, 30 * 1000);
 
             setIsTimerRunning(false);
             setActiveView('library');
             if (lastChoicePackageRef.current) {
               window.history.pushState({ juarakelas: true, modal: true }, '');
               setPackageChoiceModal(lastChoicePackageRef.current);
-              triggerToast('Progres soal disimpan sementara—bisa dilanjut kalau tidak sengaja swipe!', 'info');
+              triggerToast('Progres soal disimpan 30 detik—bisa dilanjut kalau tidak sengaja swipe!', 'info');
             }
           }
 
@@ -713,7 +717,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const handleResumeSavedQuizSession = () => {
         const saved = savedQuizSessionRef.current;
         if (!saved) return;
-        const isStillValid = Date.now() - saved.savedAt <= 2 * 60 * 1000;
+        const isStillValid = Date.now() - saved.savedAt <= 30 * 1000;
         savedQuizSessionRef.current = null;
         if (savedSessionTimerRef.current) {
           clearTimeout(savedSessionTimerRef.current);
@@ -2112,7 +2116,7 @@ ${referenceOutline}`;
 
                   <div className="space-y-3">
                     {savedQuizSessionRef.current &&
-                      Date.now() - savedQuizSessionRef.current.savedAt <= 2 * 60 * 1000 && (
+                      Date.now() - savedQuizSessionRef.current.savedAt <= 30 * 1000 && (
                         <button
                           type="button"
                           onClick={handleResumeSavedQuizSession}
