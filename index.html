@@ -1823,20 +1823,20 @@ ${referenceOutline}`;
                     </div>
                   )}
 
-                    {/* Baris Bawah: Portrait -> Ragu di kiri bawah, Lanjutkan di kanan bawah | Landscape -> Ragu di tengah */}
-                    <div className="pt-3 sm:pt-5 border-t-2 border-amber-100 flex items-center justify-between gap-2.5">
+                    {/* Baris Bawah: Kiri Sebelumnya/Kembali - Tengah Ragu-ragu - Kanan Selanjutnya/Kumpulkan */}
+                    <div className="pt-3 sm:pt-5 border-t-2 border-amber-100 flex items-center justify-between gap-2">
                       <div className="flex-1 flex items-center justify-start">
                         <button
                           type="button"
                           disabled={currentIdx === 0}
                           onClick={() => goToQuestionIndex(currentIdx - 1)}
-                          className="hidden sm:inline-flex px-4 py-2.5 rounded-xl font-bold text-sm border-2 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                          className="inline-flex px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40 whitespace-nowrap"
                         >
                           ← Sebelumnya
                         </button>
                       </div>
 
-                      <div className="flex-1 flex items-center justify-start sm:justify-center">
+                      <div className="flex-1 flex items-center justify-center">
                         <button
                           type="button"
                           onClick={() =>
@@ -1845,7 +1845,7 @@ ${referenceOutline}`;
                               [currentQuestion.id]: !prev[currentQuestion.id]
                             }))
                           }
-                          className={`px-3.5 py-2.5 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 ${
+                          className={`px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 whitespace-nowrap ${
                             unsureFlags[currentQuestion.id]
                               ? 'bg-amber-400 border-amber-500 text-slate-900'
                               : 'bg-amber-50 border-amber-300 text-amber-800'
@@ -1860,7 +1860,7 @@ ${referenceOutline}`;
                           <button
                             type="button"
                             onClick={() => goToQuestionIndex(currentIdx + 1)}
-                            className="px-4 py-2.5 sm:px-5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-slate-900 text-white hover:bg-slate-800"
+                            className="px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-slate-900 text-white hover:bg-slate-800 whitespace-nowrap"
                           >
                             Selanjutnya →
                           </button>
@@ -1868,9 +1868,9 @@ ${referenceOutline}`;
                           <button
                             type="button"
                             onClick={() => openModalWithHistory(setShowSubmitConfirm, true)}
-                            className="px-4 py-2.5 sm:px-5 sm:py-2.5 rounded-xl font-extrabold text-xs sm:text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-md"
+                            className="px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl font-extrabold text-xs sm:text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-md whitespace-nowrap"
                           >
-                            ✅ Kumpulkan & Cek Nilai
+                            ✅ Kumpulkan
                           </button>
                         )}
                       </div>
