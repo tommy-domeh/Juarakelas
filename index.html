@@ -418,7 +418,8 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [activeView, setActiveView] = useState('library');
       const isHandlingPopStateRef = useRef(false);
       const lastPopStateTimeRef = useRef(0);
-      const backPressWarningRef = useRef({ active: false, timer: null });
+      const savedQuizSessionRef = useRef(null);
+      const savedSessionTimerRef = useRef(null);
 
       const triggerToast = (msg, type = 'info') => {
         setToastMessage({ msg, type });
@@ -606,29 +607,29 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             // 2. Dari halaman Hasil Nilai -> mundur ke halaman Kuis sebelumnya
             setActiveView('quiz');
           } else if (activeView === 'quiz') {
-            // 3. Saat di halaman Soal: butuh tekan Back 2x dalam 3 detik sambil menampilkan peringatan
-            if (!backPressWarningRef.current.active) {
-              backPressWarningRef.current.active = true;
-              window.history.pushState({ juarakelas: true, view: 'quiz', guard: true }, '');
-              triggerToast('Tekan Back sekali lagi untuk keluar dari latihan soal!', 'warning');
+            // Simpan progres soal saat ini selama 2 menit jika tidak sengaja ter-swipe keluar
+            savedQuizSessionRef.current = {
+              pkg: activePackage,
+              currentIdx,
+              answers,
+              unsureFlags,
+              quizStartTime,
+              timeLeftSeconds,
+              savedAt: Date.now()
+            };
+            if (savedSessionTimerRef.current) {
+              clearTimeout(savedSessionTimerRef.current);
+            }
+            savedSessionTimerRef.current = setTimeout(() => {
+              savedQuizSessionRef.current = null;
+            }, 2 * 60 * 1000);
 
-              if (backPressWarningRef.current.timer) {
-                clearTimeout(backPressWarningRef.current.timer);
-              }
-              backPressWarningRef.current.timer = setTimeout(() => {
-                backPressWarningRef.current.active = false;
-              }, 3000);
-            } else {
-              backPressWarningRef.current.active = false;
-              if (backPressWarningRef.current.timer) {
-                clearTimeout(backPressWarningRef.current.timer);
-              }
-              setIsTimerRunning(false);
-              setActiveView('library');
-              if (lastChoicePackageRef.current) {
-                window.history.pushState({ juarakelas: true, modal: true }, '');
-                setPackageChoiceModal(lastChoicePackageRef.current);
-              }
+            setIsTimerRunning(false);
+            setActiveView('library');
+            if (lastChoicePackageRef.current) {
+              window.history.pushState({ juarakelas: true, modal: true }, '');
+              setPackageChoiceModal(lastChoicePackageRef.current);
+              triggerToast('Progres soal disimpan sementara—bisa dilanjut kalau tidak sengaja swipe!', 'info');
             }
           }
 
@@ -641,6 +642,12 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         return () => window.removeEventListener('popstate', handlePopState);
       }, [
         activeView,
+        activePackage,
+        currentIdx,
+        answers,
+        unsureFlags,
+        quizStartTime,
+        timeLeftSeconds,
         showSubmitConfirm,
         packageChoiceModal,
         packageToDelete,
@@ -686,6 +693,10 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         if (!fromChoiceModal) {
           lastChoicePackageRef.current = null;
         }
+        savedQuizSessionRef.current = null;
+        if (savedSessionTimerRef.current) {
+          clearTimeout(savedSessionTimerRef.current);
+        }
         setPackageChoiceModal(null);
         setActivePackage(pkg);
         setAnswers({});
@@ -695,6 +706,31 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         setShowSubmitConfirm(false);
         setQuizStartTime(Date.now());
         setTimeLeftSeconds(15 * 60);
+        setIsTimerRunning(timerEnabled);
+        navigateToView('quiz');
+      };
+
+      const handleResumeSavedQuizSession = () => {
+        const saved = savedQuizSessionRef.current;
+        if (!saved) return;
+        const isStillValid = Date.now() - saved.savedAt <= 2 * 60 * 1000;
+        savedQuizSessionRef.current = null;
+        if (savedSessionTimerRef.current) {
+          clearTimeout(savedSessionTimerRef.current);
+        }
+        if (!isStillValid) {
+          triggerToast('Waktu jeda lanjut soal sudah habis, mulai sesi baru ya.', 'warning');
+          return;
+        }
+        setPackageChoiceModal(null);
+        setActivePackage(saved.pkg);
+        setCurrentIdx(saved.currentIdx || 0);
+        setAnswers(saved.answers || {});
+        setUnsureFlags(saved.unsureFlags || {});
+        setQuizStartTime(saved.quizStartTime || Date.now());
+        setTimeLeftSeconds(saved.timeLeftSeconds ?? 15 * 60);
+        setGradingResults(null);
+        setShowSubmitConfirm(false);
         setIsTimerRunning(timerEnabled);
         navigateToView('quiz');
       };
@@ -2068,6 +2104,25 @@ ${referenceOutline}`;
                   </div>
 
                   <div className="space-y-3">
+                    {savedQuizSessionRef.current &&
+                      Date.now() - savedQuizSessionRef.current.savedAt <= 2 * 60 * 1000 && (
+                        <button
+                          type="button"
+                          onClick={handleResumeSavedQuizSession}
+                          className="w-full p-4 rounded-2xl border-2 border-emerald-400 bg-emerald-50 hover:bg-emerald-100 text-left transition-all flex items-center justify-between gap-3"
+                        >
+                          <div>
+                            <div className="font-extrabold text-sm sm:text-base text-emerald-900">
+                              ↩️ Lanjutkan Soal Tadi (No. {(savedQuizSessionRef.current.currentIdx || 0) + 1})
+                            </div>
+                            <div className="text-xs text-emerald-700 mt-0.5">
+                              Jawabanmu tersimpan sementara agar aman jika tidak sengaja ter-swipe
+                            </div>
+                          </div>
+                          <span className="text-lg font-extrabold text-emerald-600">→</span>
+                        </button>
+                      )}
+
                     <button
                       type="button"
                       onClick={() => handleStartSelectedVersion(packageChoiceModal, 'old')}
