@@ -265,8 +265,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         let unsubscribe = () => {};
         try {
           unsubscribe = firestoreDb
-            .collection('juarakelas_packages')
-            .orderBy('createdAt', 'desc')
+            .collection(CLOUD_COLLECTION)
             .onSnapshot(
               (snapshot) => {
                 setCloudConnected(true);
@@ -284,8 +283,12 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
                 setPackages((prevLocal) => {
                   const mapById = new Map();
                   mapById.set(DEFAULT_BUILTIN_PACKAGE.id, DEFAULT_BUILTIN_PACKAGE);
-                  prevLocal.forEach((p) => mapById.set(p.id, p));
-                  cloudList.forEach((c) => mapById.set(c.id, c));
+                  prevLocal.forEach((p) => {
+                    if (p && p.id) mapById.set(p.id, p);
+                  });
+                  cloudList.forEach((c) => {
+                    if (c && c.id) mapById.set(c.id, c);
+                  });
 
                   return Array.from(mapById.values()).sort(
                     (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
@@ -305,105 +308,6 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             unsubscribe();
           } catch (e) {}
         };
-      }, []);
-
-      const savePackageToCloud = async (pkgObj) => {
-        setPackages((prev) => [pkgObj, ...prev.filter((p) => p.id !== pkgObj.id)]);
-        if (!firestoreDb) return false;
-        try {
-          await firestoreDb.collection('juarakelas_packages').doc(pkgObj.id).set(pkgObj);
-          return true;
-        } catch (e) {
-          return false;
-        }
-      };
-
-      const deletePackageFromCloud = async (pkgId) => {
-        setPackages((prev) => prev.filter((p) => p.id !== pkgId));
-        if (!firestoreDb) return;
-        try {
-          await firestoreDb.collection('juarakelas_packages').doc(pkgId).delete();
-        } catch (e) {}
-      };
-
-      // Dorong semua paket lokal (termasuk paket yang dibuat sebelum Cloud Sync aktif) ke Firestore
-      const handlePushAllToCloud = async () => {
-        if (!firestoreDb) {
-          triggerToast('Firestore belum terhubung. Pastikan Firestore Database sudah dibuat di Firebase!', 'warning');
-          return;
-        }
-        setIsSyncingCloud(true);
-        let successCount = 0;
-        let lastReason = '';
-
-        for (const pkg of packages) {
-          if (pkg.isBuiltin) continue;
-          try {
-            await firestoreDb.collection(CLOUD_COLLECTION).doc(pkg.id).set({
-              ...pkg,
-              updatedAt: Date.now()
-            });
-            successCount += 1;
-          } catch (err) {
-            lastReason = err?.message || 'Akses Firestore ditolak';
-          }
-        }
-
-        setIsSyncingCloud(false);
-        if (lastReason) {
-          triggerToast(`Cloud gagal: ${lastReason}. Aktifkan Firestore Database (Test mode) di Firebase!`, 'warning');
-        } else if (successCount > 0) {
-          setCloudConnected(true);
-          triggerToast(`${successCount} paket soal berhasil dikirim ke Cloud! Sekarang buka & refresh di iPad.`, 'success');
-        } else {
-          setCloudConnected(true);
-          triggerToast('Cloud sudah tersinkron! Tidak ada paket tambahan baru untuk dikirim.', 'info');
-        }
-      };
-
-      useEffect(() => {
-        try {
-          localStorage.setItem('juarakelas_packages_v1', JSON.stringify(packages));
-        } catch (e) {}
-      }, [packages]);
-
-      // Sinkronisasi Real-Time Cloud Firestore agar soal dari PC langsung muncul di iPad
-      useEffect(() => {
-        if (!firestoreDb) return;
-        const unsubscribe = firestoreDb
-          .collection(CLOUD_COLLECTION)
-          .onSnapshot(
-            (snapshot) => {
-              setCloudConnected(true);
-              const cloudPkgs = [];
-              snapshot.forEach((doc) => {
-                const data = doc.data();
-                if (data && data.id && Array.isArray(data.questions)) {
-                  cloudPkgs.push(data);
-                }
-              });
-
-              setPackages((prevLocal) => {
-                const mapById = new Map();
-                mapById.set(DEFAULT_BUILTIN_PACKAGE.id, DEFAULT_BUILTIN_PACKAGE);
-                prevLocal.forEach((p) => {
-                  if (p && p.id) mapById.set(p.id, p);
-                });
-                cloudPkgs.forEach((cp) => {
-                  if (cp && cp.id) mapById.set(cp.id, cp);
-                });
-
-                const merged = Array.from(mapById.values());
-                merged.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                return merged;
-              });
-            },
-            () => {
-              setCloudConnected(false);
-            }
-          );
-
-        return () => unsubscribe();
       }, []);
 
       useEffect(() => {
@@ -739,16 +643,25 @@ ${kisiKisiText.slice(0, 28000)}`;
             questions: normalizedQuestions
           };
 
-          await savePackageToCloud(newPackageObj);
+          setPackages((prev) => [newPackageObj, ...prev.filter((p) => p.id !== newPackageObj.id)]);
+          const cloudRes = await savePackageToCloud(newPackageObj);
           setSelectedGrade(Number(genGrade));
           setSelectedSemester(Number(genSemester));
           setShowUploadModal(false);
           setActiveView('library');
 
-          triggerToast(
-            `Hore! Paket soal tersimpan di Cloud & Kelas ${genGrade} • Semester ${genSemester}!`,
-            'success'
-          );
+          if (cloudRes.ok) {
+            setCloudConnected(true);
+            triggerToast(
+              `Hore! Paket soal tersimpan di Cloud & Kelas ${genGrade} • Semester ${genSemester}!`,
+              'success'
+            );
+          } else {
+            triggerToast(
+              `Tersimpan lokal, namun Cloud gagal (${cloudRes.reason}). Aktifkan Firestore Database di Firebase!`,
+              'warning'
+            );
+          }
         } catch (err) {
           setGeneratorError(
             `Gagal membuat soal: ${err.message}. Pastikan Gemini API Key kamu benar dan aktif ya.`
@@ -913,6 +826,7 @@ Aturan penilaian fleksibel:
         if (finalScore > prevBest) {
           const updatedPkg = { ...activePackage, bestScore: finalScore };
           setActivePackage(updatedPkg);
+          setPackages((prev) => [updatedPkg, ...prev.filter((p) => p.id !== updatedPkg.id)]);
           await savePackageToCloud(updatedPkg);
         }
 
@@ -1883,9 +1797,11 @@ Aturan penilaian fleksibel:
                   <button
                     type="button"
                     onClick={async () => {
-                      await deletePackageFromCloud(packageToDelete.id);
+                      const targetId = packageToDelete.id;
+                      setPackages((prev) => prev.filter((p) => p.id !== targetId));
                       setPackageToDelete(null);
-                      triggerToast('Paket soal dihapus dari cloud.', 'info');
+                      await deletePackageFromCloud(targetId);
+                      triggerToast('Paket soal dihapus.', 'info');
                     }}
                     className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-extrabold text-sm"
                   >
