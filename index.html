@@ -64,7 +64,7 @@
     }
 
     async function savePackageToCloud(pkgObj) {
-      if (!firestoreDb) return false;
+      if (!firestoreDb) return { ok: false, reason: 'Firebase belum siap di browser.' };
       try {
         await firestoreDb
           .collection(CLOUD_COLLECTION)
@@ -73,19 +73,19 @@
             ...pkgObj,
             updatedAt: Date.now()
           });
-        return true;
+        return { ok: true };
       } catch (err) {
-        return false;
+        return { ok: false, reason: err?.message || 'Gagal menulis ke Firestore.' };
       }
     }
 
     async function deletePackageFromCloud(pkgId) {
-      if (!firestoreDb) return false;
+      if (!firestoreDb) return { ok: false, reason: 'Firebase belum siap di browser.' };
       try {
         await firestoreDb.collection(CLOUD_COLLECTION).doc(pkgId).delete();
-        return true;
+        return { ok: true };
       } catch (err) {
-        return false;
+        return { ok: false, reason: err?.message || 'Gagal menghapus dari Firestore.' };
       }
     }
 
@@ -244,6 +244,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       });
 
       const [cloudConnected, setCloudConnected] = useState(false);
+      const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
       const [xpStars, setXpStars] = useState(() => {
         return Number(localStorage.getItem('juarakelas_xp') || '150');
@@ -306,10 +307,13 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
       const savePackageToCloud = async (pkgObj) => {
         setPackages((prev) => [pkgObj, ...prev.filter((p) => p.id !== pkgObj.id)]);
-        if (!firestoreDb) return;
+        if (!firestoreDb) return false;
         try {
           await firestoreDb.collection('juarakelas_packages').doc(pkgObj.id).set(pkgObj);
-        } catch (e) {}
+          return true;
+        } catch (e) {
+          return false;
+        }
       };
 
       const deletePackageFromCloud = async (pkgId) => {
@@ -318,6 +322,41 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         try {
           await firestoreDb.collection('juarakelas_packages').doc(pkgId).delete();
         } catch (e) {}
+      };
+
+      // Dorong semua paket lokal (termasuk paket yang dibuat sebelum Cloud Sync aktif) ke Firestore
+      const handlePushAllToCloud = async () => {
+        if (!firestoreDb) {
+          triggerToast('Firestore belum terhubung. Pastikan Firestore Database sudah dibuat di Firebase!', 'warning');
+          return;
+        }
+        setIsSyncingCloud(true);
+        let successCount = 0;
+        let lastReason = '';
+
+        for (const pkg of packages) {
+          if (pkg.isBuiltin) continue;
+          try {
+            await firestoreDb.collection(CLOUD_COLLECTION).doc(pkg.id).set({
+              ...pkg,
+              updatedAt: Date.now()
+            });
+            successCount += 1;
+          } catch (err) {
+            lastReason = err?.message || 'Akses Firestore ditolak';
+          }
+        }
+
+        setIsSyncingCloud(false);
+        if (lastReason) {
+          triggerToast(`Cloud gagal: ${lastReason}. Aktifkan Firestore Database (Test mode) di Firebase!`, 'warning');
+        } else if (successCount > 0) {
+          setCloudConnected(true);
+          triggerToast(`${successCount} paket soal berhasil dikirim ke Cloud! Sekarang buka & refresh di iPad.`, 'success');
+        } else {
+          setCloudConnected(true);
+          triggerToast('Cloud sudah tersinkron! Tidak ada paket tambahan baru untuk dikirim.', 'info');
+        }
       };
 
       useEffect(() => {
@@ -471,6 +510,47 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         }
       };
 
+      // Mendorong semua paket soal lokal ke Firestore agar langsung muncul di iPad
+      const handleManualSyncToCloud = async () => {
+        if (!firestoreDb) {
+          triggerToast(
+            'Firebase belum aktif. Pastikan Firestore Database sudah dibuat di Firebase Console.',
+            'warning'
+          );
+          return;
+        }
+
+        const customPkgs = packages.filter((p) => !p.isBuiltin);
+        if (customPkgs.length === 0) {
+          triggerToast('Belum ada paket soal buatan sendiri untuk disinkronkan.', 'info');
+          return;
+        }
+
+        let successCount = 0;
+        let lastReason = '';
+        for (const pkg of customPkgs) {
+          const res = await savePackageToCloud(pkg);
+          if (res.ok) {
+            successCount += 1;
+          } else {
+            lastReason = res.reason;
+          }
+        }
+
+        if (successCount > 0) {
+          setCloudConnected(true);
+          triggerToast(
+            `${successCount} paket soal berhasil dikirim ke Cloud! Silakan refresh halaman di iPad.`,
+            'success'
+          );
+        } else {
+          triggerToast(
+            `Gagal kirim ke Cloud (${lastReason}). Cek Firestore Database di Firebase Console ya!`,
+            'warning'
+          );
+        }
+      };
+
       const openUploadModalForCurrentFilter = () => {
         if (!geminiApiKey) {
           setTempApiKey('');
@@ -514,23 +594,23 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
           setUploadedPdfName(file.name);
           setUploadedPdfPages(numPages);
-          setKisiKisiText(text);
+          const savedOk = await savePackageToCloud(newPackageObj);
+          setSelectedGrade(Number(genGrade));
+          setSelectedSemester(Number(genSemester));
+          setShowUploadModal(false);
+          setActiveView('library');
 
-          const cleanName = file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ');
-          if (!genTitle) setGenTitle(cleanName);
-          if (!genSubject) {
-            const lower = cleanName.toLowerCase();
-            if (lower.includes('english') || lower.includes('inggris')) setGenSubject('Bahasa Inggris');
-            else if (lower.includes('matematika') || lower.includes('mtk')) setGenSubject('Matematika');
-            else if (lower.includes('ipas') || lower.includes('ipa')) setGenSubject('IPAS');
-            else if (lower.includes('indonesia')) setGenSubject('Bahasa Indonesia');
-            else if (lower.includes('pai') || lower.includes('agama') || lower.includes('quran'))
-              setGenSubject('Pendidikan Agama Islam');
-            else if (lower.includes('pancasila') || lower.includes('ppkn'))
-              setGenSubject('Pendidikan Pancasila');
+          if (savedOk) {
+            triggerToast(
+              `Hore! Paket soal tersimpan di Cloud & Kelas ${genGrade} • Semester ${genSemester}!`,
+              'success'
+            );
+          } else {
+            triggerToast(
+              `Paket tersimpan di PC, tapi Cloud belum aktif. Cek Firestore Database di Firebase Console ya!`,
+              'warning'
+            );
           }
-
-          triggerToast(`Berhasil membaca ${numPages} halaman dari ${file.name}!`, 'success');
         } catch (err) {
           setGeneratorError(`Gagal membaca file PDF: ${err.message}`);
         } finally {
@@ -936,6 +1016,15 @@ Aturan penilaian fleksibel:
                   </>
                 ) : (
                   <>
+                    <button
+                      type="button"
+                      onClick={handleManualSyncToCloud}
+                      className="px-3 py-2 rounded-xl text-xs font-extrabold border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 transition-all"
+                      title="Kirim paket soal dari perangkat ini ke cloud agar muncul di iPad"
+                    >
+                      ☁️ Sync iPad
+                    </button>
+
                     <button
                       onClick={() => {
                         setTempApiKey(geminiApiKey);
