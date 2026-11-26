@@ -23,86 +23,101 @@
     body {
       font-family: 'Plus Jakarta Sans', sans-serif;
     }
+    .starry-night-bg {
+      background-color: #161836;
+      background-image:
+        radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.45) 1px, transparent 1.5px),
+        radial-gradient(circle at 72% 14%, rgba(255, 255, 255, 0.35) 1.2px, transparent 1.8px),
+        radial-gradient(circle at 42% 38%, rgba(255, 255, 255, 0.3) 1px, transparent 1.5px),
+        radial-gradient(circle at 86% 62%, rgba(255, 255, 255, 0.35) 1.2px, transparent 1.8px),
+        radial-gradient(circle at 12% 76%, rgba(255, 255, 255, 0.3) 1px, transparent 1.5px),
+        radial-gradient(circle at 60% 82%, rgba(255, 255, 255, 0.25) 1px, transparent 1.5px),
+        radial-gradient(ellipse at 50% 0%, #2a2863 0%, #191a3e 55%, #11122b 100%);
+      background-attachment: fixed;
+    }
   </style>
 </head>
-<body class="bg-gradient-to-br from-sky-50 via-amber-50/40 to-indigo-50 text-slate-800 min-h-screen">
-  <div id="root"></div>
+<body class="starry-night-bg text-slate-100 min-h-screen relative overflow-x-hidden">
+  <!-- Ornamen Bulan & Cincin Planet Halus di Sisi Kanan Atas -->
+  <div class="pointer-events-none fixed -right-12 top-28 z-0 hidden sm:flex items-center justify-center w-56 h-56 rounded-full bg-white/[0.03] border border-white/[0.06]">
+    <div class="flex items-center justify-center w-40 h-40 rounded-full bg-amber-200/[0.06] border border-amber-100/10">
+      <div class="w-24 h-24 rounded-full bg-gradient-to-br from-amber-200/80 to-amber-400/70 shadow-lg shadow-amber-300/10"></div>
+    </div>
+    <span class="absolute top-6 left-9 text-amber-100/70 text-sm">✦</span>
+  </div>
+
+  <div id="root" class="relative z-10"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // Konfigurasi PDF.js Worker
-    if (window.pdfjsLib) {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-
-    // ========================================================================
-    // KONFIGURASI CLOUD FIREBASE (juarakelas-9b8e1) UNTUK SINKRON PC <-> IPAD
-    // ========================================================================
+    // =========================================================================
+    // KONFIGURASI FIREBASE FIRESTORE (JUARAKELAS-9B8E1)
+    // =========================================================================
     const FIREBASE_CONFIG = {
-      apiKey: 'AIzaSyALE0xFXT1X0BFuhKWu5haYKvT7KWTaiMg',
-      authDomain: 'juarakelas-9b8e1.firebaseapp.com',
-      projectId: 'juarakelas-9b8e1',
-      storageBucket: 'juarakelas-9b8e1.firebasestorage.app',
-      messagingSenderId: '869988330041',
-      appId: '1:869988330041:web:76e39d7ed55637dcbdbbe8'
+      apiKey: "AIzaSyALE0xFXT1X0BFuhKWu5haYKvT7KWTaiMg",
+      authDomain: "juarakelas-9b8e1.firebaseapp.com",
+      projectId: "juarakelas-9b8e1",
+      storageBucket: "juarakelas-9b8e1.firebasestorage.app",
+      messagingSenderId: "869988330041",
+      appId: "1:869988330041:web:76e39d7ed55637dcbdbbe8"
     };
 
-    const DEFAULT_ADMIN_PIN = '123456';
-    const ADMIN_RECOVERY_CODE = 'TOMMY2026';
+    const FIRESTORE_COLLECTION = "juarakelas_packages";
 
     let firestoreDb = null;
-    const CLOUD_COLLECTION = 'juarakelas_packages';
-
     try {
       if (window.firebase) {
-        const fbApp = window.firebase.apps.length
-          ? window.firebase.app()
-          : window.firebase.initializeApp(FIREBASE_CONFIG);
-        firestoreDb = window.firebase.firestore(fbApp);
+        if (!firebase.apps.length) {
+          firebase.initializeApp(FIREBASE_CONFIG);
+        }
+        firestoreDb = firebase.firestore();
       }
     } catch (e) {
       firestoreDb = null;
     }
 
     async function savePackageToCloud(pkgObj) {
-      if (!firestoreDb) return { ok: false, reason: 'Firebase belum siap di browser.' };
+      if (!firestoreDb) {
+        return { ok: false, reason: "SDK Firebase belum termuat di browser" };
+      }
       try {
-        await firestoreDb
-          .collection(CLOUD_COLLECTION)
-          .doc(pkgObj.id)
-          .set({
-            ...pkgObj,
-            updatedAt: Date.now()
-          });
+        await firestoreDb.collection(FIRESTORE_COLLECTION).doc(pkgObj.id).set(pkgObj);
         return { ok: true };
-      } catch (err) {
-        const errCode = err?.code ? `[${err.code}] ` : '';
-        return { ok: false, reason: `${errCode}${err?.message || 'Gagal menulis ke Firestore.'}` };
+      } catch (e) {
+        const errCode = e?.code || "unknown";
+        const errMsg = e?.message || "Gagal menulis ke Firestore";
+        return { ok: false, reason: `[${errCode}] ${errMsg}` };
       }
     }
 
     async function deletePackageFromCloud(pkgId) {
-      if (!firestoreDb) return { ok: false, reason: 'Firebase belum siap di browser.' };
+      if (!firestoreDb) return false;
       try {
-        await firestoreDb.collection(CLOUD_COLLECTION).doc(pkgId).delete();
-        return { ok: true };
-      } catch (err) {
-        const errCode = err?.code ? `[${err.code}] ` : '';
-        return { ok: false, reason: `${errCode}${err?.message || 'Gagal menghapus dari Firestore.'}` };
+        await firestoreDb.collection(FIRESTORE_COLLECTION).doc(pkgId).delete();
+        return true;
+      } catch (e) {
+        return false;
       }
     }
 
-    // ========================================================================
-    // PAKET SOAL BAWAAN (KELAS 2 - SEMESTER 1 - BAHASA INGGRIS)
-    // ========================================================================
+    // =========================================================================
+    // DATA BAWAAN (CONTOH PAKET KELAS 2 SEMESTER 1)
+    // =========================================================================
     const DEFAULT_KISI_KISI = `KISI-KISI ASESMEN SUMATIF AKHIR SEMESTER (ASAS)
+SEKOLAH AL-QUR'AN THALHAH BIN UBAIDILLAH (S.A.T.U.) ISLAMIC SCHOOL
 Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
-1. Family Members & Introducing Family (Grandfather, This is my...)
-2. Adab to Parents & Polite Words (Yes, certainly / You are welcome)
-3. Animals, Sirah Cave Thawr (spider/web), & a/an
-4. Prepositions in/on & word order`;
+
+1. Unit 1 (Family Members): Disajikan ilustrasi gambar kakek, peserta didik dapat menentukan kosakata anggota keluarga yang tepat.
+2. Unit 1 (Introducing Family): Disajikan dialog anak memperkenalkan anggota keluarganya, peserta didik dapat melengkapi dialog tersebut sesuai konteks.
+3. Unit 1 (Adab to Parents - Birrul Walidain): Disajikan situasi interaksi dengan orang tua, peserta didik dapat menerapkan adab berbicara yang baik.
+4. Unit 2 (Animals & Expressing Admiration): Disajikan ilustrasi anak melihat hewan ciptaan Allah, peserta didik dapat menentukan kalimat thayyibah (MasyaAllah) yang tepat.
+5. Unit 2 (Sirah Animals): Disajikan pernyataan singkat mengenai kisah Gua Tsur, peserta didik dapat mengidentifikasi hewan yang membantu Rasulullah SAW (laba-laba / spider).
+6. Unit 3 (Helping at Home & Polite Words): Disajikan aktivitas membantu di rumah dan dialog ucapan terima kasih, peserta didik dapat memilih respons santun yang sesuai.
+7. Unit 4 (Rooms in the House & Prepositions in/on): Disajikan posisi benda di ruangan, peserta didik dapat menentukan preposisi tempat yang tepat (in/on).
+8. Unit 2 (Sentence Structure a/an): Disajikan gambar seekor hewan, peserta didik melengkapi kalimat deskripsi hewan dengan artikel a/an yang tepat.
+9. Unit 3 (Sentence Building - Word Order): Disajikan kata-kata acak tentang mencuci piring, peserta didik menyusunnya menjadi kalimat yang benar.
+10. Unit 4 (Prepositions in/on): Disajikan gambar apel di dalam keranjang, peserta didik dapat menuliskan kalimat/preposisi yang tepat.`;
 
     const DEFAULT_BUILTIN_PACKAGE = {
       id: 'builtin_kls2_sem1_english',
@@ -130,34 +145,187 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           ],
           correctAnswer: 'B',
           explanation:
-            'Langkah 1: Perhatikan petunjuk "my father’s father" (ayah dari ayahku) dan gambar kakek.\nLangkah 2: Kakek dalam Bahasa Inggris adalah "Grandfather".',
+            'Langkah 1: Perhatikan petunjuk "my father’s father" (ayah dari ayahku) dan gambar seorang kakek.\nLangkah 2: Dalam Bahasa Inggris, kakek adalah "Grandfather", sedangkan nenek adalah "Grandmother".\nLangkah 3: Maka jawaban yang tepat adalah B. Grandfather.',
           trapWarning:
-            'Jangan tertukar antara "Grandfather" (kakek) dan "Grandmother" (nenek).'
+            'Jangan tertukar antara "Grandfather" (kakek) dan "Grandmother" (nenek)! Perhatikan juga kata ganti "He" (dia laki-laki) pada soal.'
         },
         {
           id: 'q2',
+          type: 'pg',
+          unit: 'Unit 1: Introducing Family',
+          visualEmoji: '👧👉👩🧕',
+          visualCaption: 'Aisyah menunjuk seorang wanita dewasa dan memperkenalkannya kepada temannya.',
+          question:
+            'Aisyah: "Hello, Zahra! ... my mother. Her name is Mrs. Fatimah."\nZahra: "Nice to meet you, Mrs. Fatimah."',
+          options: [
+            { key: 'A', text: 'This is' },
+            { key: 'B', text: 'He is' },
+            { key: 'C', text: 'They are' },
+            { key: 'D', text: 'I am' }
+          ],
+          correctAnswer: 'A',
+          explanation:
+            'Langkah 1: Aisyah sedang memperkenalkan ibunya ("my mother") kepada Zahra.\nLangkah 2: Ungkapan Bahasa Inggris untuk memperkenalkan satu anggota keluarga adalah "This is my...".\nLangkah 3: Jadi kalimat lengkapnya menjadi "This is my mother."',
+          trapWarning:
+            'Jangan pilih "He is" karena ibu adalah perempuan (seharusnya She is). Pilihan "This is" paling tepat untuk memperkenalkan seseorang secara langsung.'
+        },
+        {
+          id: 'q3',
+          type: 'pg',
+          unit: 'Unit 1: Adab to Parents (Birrul Walidain)',
+          visualEmoji: '🧕🗣️👦✨',
+          visualCaption: 'Ibu meminta tolong kepada Ahmad untuk mengambilkan buku di atas meja.',
+          question:
+            'Mother: "Ahmad, please help me take that book."\nAhmad: "..., Mom. I will take it for you."',
+          options: [
+            { key: 'A', text: 'No, I am busy' },
+            { key: 'B', text: 'Yes, certainly' },
+            { key: 'C', text: 'Go away' },
+            { key: 'D', text: 'I don’t care' }
+          ],
+          correctAnswer: 'B',
+          explanation:
+            'Langkah 1: Sebagai anak yang berbakti kepada orang tua (Birrul Walidain), saat orang tua meminta bantuan kita harus menjawab dengan ramah dan santun.\nLangkah 2: "Yes, certainly" artinya "Ya, tentu saja", merupakan jawaban sopan saat bersedia membantu.',
+          trapWarning:
+            'Hati-hati memilih jawaban yang bernada menolak atau kasar seperti "No, I am busy". Selalu pilih respons yang menunjukkan adab sopan santun.'
+        },
+        {
+          id: 'q4',
+          type: 'pg',
+          unit: 'Unit 2: Animals & Expressing Admiration',
+          visualEmoji: '🐘🦒🦓😲✨',
+          visualCaption: 'Ali melihat hewan gajah yang sangat besar dan indah ciptaan Allah di kebun binatang.',
+          question:
+            'Ali sees a very big and amazing elephant created by Allah. What should Ali say?',
+          options: [
+            { key: 'A', text: 'Innalillahi' },
+            { key: 'B', text: 'Astaghfirullah' },
+            { key: 'C', text: 'MasyaAllah' },
+            { key: 'D', text: 'See you later' }
+          ],
+          correctAnswer: 'C',
+          explanation:
+            'Langkah 1: Ali merasa takjub dan kagum saat melihat kebesaran ciptaan Allah (hewan gajah yang besar).\nLangkah 2: Kalimat thayyibah yang diucapkan ketika kagum melihat ciptaan Allah adalah "MasyaAllah".',
+          trapWarning:
+            'Jangan tertukar dengan "Astaghfirullah" (istighfar saat berbuat salah) atau "Innalillahi" (saat mendengar musibah).'
+        },
+        {
+          id: 'q5',
+          type: 'pg',
+          unit: 'Unit 2: Sirah Animals',
+          visualEmoji: '🕸️🕷️🕊️⛰️',
+          visualCaption: 'Ilustrasi pintu Gua Tsur yang tertutup jaring laba-laba dan sarang burung merpati.',
+          question:
+            'In the story of Cave Thawr (Gua Tsur), which small animal made a web to protect Prophet Muhammad SAW?',
+          options: [
+            { key: 'A', text: 'A spider' },
+            { key: 'B', text: 'A lion' },
+            { key: 'C', text: 'A rabbit' },
+            { key: 'D', text: 'A fish' }
+          ],
+          correctAnswer: 'A',
+          explanation:
+            'Langkah 1: Ingat kisah perjalanan hijrah Rasulullah SAW bersama Abu Bakar Ash-Shiddiq di Gua Tsur.\nLangkah 2: Allah memerintahkan seekor laba-laba ("spider") untuk membuat jaring ("web") di mulut gua sehingga musuh mengira gua itu kosong.',
+          trapWarning:
+            'Perhatikan kata kunci "made a web" (membuat jaring). Hewan yang membuat jaring adalah spider (laba-laba).'
+        },
+        {
+          id: 'q6',
+          type: 'pg',
+          unit: 'Unit 3: Helping at Home & Polite Words',
+          visualEmoji: '🧹🏠👦🤝👩',
+          visualCaption: 'Umar membantu ibunya menyapu lantai ruang tamu sampai bersih.',
+          question:
+            'Umar helps his mother sweep the floor.\nMother: "Thank you for helping me, Umar."\nUmar: "..."',
+          options: [
+            { key: 'A', text: 'I am sorry' },
+            { key: 'B', text: 'You are welcome' },
+            { key: 'C', text: 'Good night' },
+            { key: 'D', text: 'Help me' }
+          ],
+          correctAnswer: 'B',
+          explanation:
+            'Langkah 1: Ibu mengucapkan terima kasih ("Thank you") kepada Umar karena sudah membantu menyapu lantai.\nLangkah 2: Jawaban sopan saat seseorang mengucapkan "Thank you" adalah "You are welcome" (Sama-sama).',
+          trapWarning:
+            'Jangan tertukar dengan "I am sorry" (Saya minta maaf). "Thank you" selalu dijawab dengan "You are welcome".'
+        },
+        {
+          id: 'q7',
+          type: 'pg',
+          unit: 'Unit 4: Rooms in the House & Prepositions (in/on)',
+          visualEmoji: '📕⬆️🪑🛋️',
+          visualCaption: 'Sebuah buku cerita diletakkan menempel di atas permukaan meja di ruang tamu.',
+          question:
+            'Look at the living room! Where is the red book? The book is ... the table.',
+          options: [
+            { key: 'A', text: 'in' },
+            { key: 'B', text: 'on' },
+            { key: 'C', text: 'at' },
+            { key: 'D', text: 'to' }
+          ],
+          correctAnswer: 'B',
+          explanation:
+            'Langkah 1: Perhatikan posisi buku terhadap meja ("table"). Buku berada menempel di atas permukaan meja.\nLangkah 2: Preposisi tempat untuk "di atas permukaan" dalam Bahasa Inggris adalah "on".',
+          trapWarning:
+            'Bedakan "on" (di atas permukaan meja) dengan "in" (di dalam wadah/laci tertutup).'
+        },
+        {
+          id: 'q8',
+          type: 'essay',
+          unit: 'Unit 2: Sentence Structure (a / an)',
+          visualEmoji: '🐘 Gray & Big',
+          visualCaption: 'Seekor gajah besar berwarna abu-abu dengan telinga lebar dan belalai panjang.',
+          question: 'Complete the sentence using "a" or "an":\n"It is ... elephant."',
+          sampleAnswer: 'an',
+          correctAnswer: 'an',
+          explanation:
+            'Langkah 1: Kata "elephant" diawali bunyi huruf vokal /e/.\nLangkah 2: Untuk kata benda tunggal yang diawali bunyi vokal, gunakan artikel "an" -> "It is an elephant."',
+          trapWarning:
+            'Gunakan "an" di depan kata berbunyi vokal (seperti an apple, an elephant), dan gunakan "a" di depan kata berbunyi konsonan.'
+        },
+        {
+          id: 'q9',
+          type: 'essay',
+          unit: 'Unit 3: Sentence Building (Word Order)',
+          visualEmoji: '🍽️🫧🧽👦',
+          visualCaption: 'Seorang anak sedang mencuci piring bersih di dapur setelah makan.',
+          question:
+            'Arrange these scrambled words into a correct sentence:\n"wash - I - the - dishes"',
+          sampleAnswer: 'I wash the dishes.',
+          correctAnswer: 'I wash the dishes.',
+          explanation:
+            'Langkah 1: Subjek di awal kalimat -> "I".\nLangkah 2: Kata kerja setelah subjek -> "wash".\nLangkah 3: Objek di akhir kalimat -> "the dishes".\nHasil: "I wash the dishes."',
+          trapWarning:
+            'Jangan lupa memulai kalimat dengan huruf kapital "I" dan meletakkan kata "the" sebelum "dishes"!'
+        },
+        {
+          id: 'q10',
           type: 'essay',
           unit: 'Unit 4: Prepositions (in / on)',
           visualEmoji: '🍎 ➡️ 🧺',
           visualCaption: 'Gambar sebuah apel merah berada DI DALAM sebuah keranjang rotan.',
-          question: 'Complete the sentence with "in" or "on":\n"The apple is ... the basket."',
+          question:
+            'Look at the picture! Complete the sentence with "in" or "on":\n"The apple is ... the basket."',
           sampleAnswer: 'in',
           correctAnswer: 'in',
           explanation:
-            'Langkah 1: Apel berada di dalam keranjang.\nLangkah 2: Kata depan untuk "di dalam" adalah "in".',
+            'Langkah 1: Apel berada di dalam ruang keranjang, bukan di atas tutupnya.\nLangkah 2: Preposisi untuk "di dalam" adalah "in", sehingga menjadi "The apple is in the basket."',
           trapWarning:
-            'Gunakan "in" untuk benda yang berada di dalam wadah.'
+            'Benda yang masuk ke dalam wadah (kotak, tas, keranjang) selalu memakai kata depan "in", bukan "on".'
         }
       ]
     };
 
-    // ========================================================================
-    // HELPER: EKSTRAK TEKS DARI FILE PDF MULTI-HALAMAN
-    // ========================================================================
+    // =========================================================================
+    // HELPER: EKSTRAK TEKS DARI FILE PDF
+    // =========================================================================
     async function extractTextFromPdfFile(file) {
       if (!window.pdfjsLib) {
-        throw new Error('Pustaka pembaca PDF belum siap, silakan muat ulang halaman.');
+        throw new Error('Library pembaca PDF belum termuat. Periksa koneksi internet.');
       }
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const totalPages = pdf.numPages;
@@ -176,20 +344,21 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       };
     }
 
-    // ========================================================================
-    // HELPER: PANGGIL GEMINI API DENGAN RETRY & AUTO-FALLBACK MODEL TERBARU
-    // ========================================================================
+    // =========================================================================
+    // HELPER: CALL GEMINI API DENGAN AUTO-FALLBACK MODEL TERBARU
+    // =========================================================================
     async function fetchGeminiWithRetry(apiKey, payload, maxRetries = 2) {
       const candidateModels = [
         'gemini-3-flash-preview',
-        'gemini-3.8-flash',
-        'gemini-2.5-flash-lite'
+        'gemini-2.5-flash-preview-09-2025',
+        'gemini-2.0-flash'
       ];
-      let lastError = new Error('Gagal menghubungi Gemini API');
+
+      let lastError = null;
 
       for (const modelName of candidateModels) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        let delay = 800;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        let delay = 1000;
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
           try {
@@ -201,56 +370,78 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
             if (!response.ok) {
               const errData = await response.json().catch(() => ({}));
-              const msg = errData?.error?.message || `HTTP ${response.status}`;
-              if (response.status === 404 || msg.toLowerCase().includes('no longer available')) {
-                lastError = new Error(msg);
+              const errMsg = errData?.error?.message || `HTTP ${response.status}`;
+
+              if (
+                response.status === 404 ||
+                errMsg.toLowerCase().includes('no longer available') ||
+                errMsg.toLowerCase().includes('not found') ||
+                errMsg.toLowerCase().includes('not supported')
+              ) {
+                lastError = new Error(errMsg);
                 break;
               }
+
               if (response.status === 429 || response.status >= 500) {
-                throw new Error(msg);
+                throw new Error(errMsg);
               }
-              throw new Error(msg);
+              throw new Error(errMsg);
             }
 
             return await response.json();
           } catch (err) {
             lastError = err;
-            if (attempt < maxRetries) {
-              await new Promise((resolve) => setTimeout(resolve, delay));
-              delay *= 2;
-            }
+            if (attempt === maxRetries) break;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            delay *= 2;
           }
         }
       }
 
-      throw lastError;
+      throw lastError || new Error('Gagal menghubungi Gemini AI.');
     }
 
-    // ========================================================================
-    // KOMPONEN UTAMA APLIKASI
-    // ========================================================================
+    // =========================================================================
+    // MAIN APPLICATION
+    // =========================================================================
     function App() {
-      // Penyimpanan Lokal (LocalStorage) agar paket soal & API Key tersimpan otomatis
-      const [geminiApiKey, setGeminiApiKey] = useState(() => {
-        return localStorage.getItem('juarakelas_gemini_key') || '';
+      const STORAGE_PACKAGES_KEY = 'juarakelas_packages_v1';
+      const STORAGE_XP_KEY = 'juarakelas_xp_v1';
+      const STORAGE_APIKEY_KEY = 'juarakelas_gemini_apikey_v1';
+      const STORAGE_ADMIN_PIN_KEY = 'juarakelas_admin_pin_v1';
+      const ADMIN_RECOVERY_CODE = 'TOMMY2026';
+
+      const [activeView, setActiveView] = useState('library');
+      const [xpStars, setXpStars] = useState(() => {
+        const saved = localStorage.getItem(STORAGE_XP_KEY);
+        return saved ? Number(saved) : 150;
       });
+
+      const [geminiApiKey, setGeminiApiKey] = useState(() => {
+        return localStorage.getItem(STORAGE_APIKEY_KEY) || '';
+      });
+      const [tempApiKey, setTempApiKey] = useState('');
+
+      // State Admin & Keamanan Password
       const [adminPin, setAdminPin] = useState(() => {
-        return localStorage.getItem('juarakelas_admin_pin') || DEFAULT_ADMIN_PIN;
+        return localStorage.getItem(STORAGE_ADMIN_PIN_KEY) || '123456';
       });
       const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
       const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
       const [showAdminPanelModal, setShowAdminPanelModal] = useState(false);
-      const [showForgotPinView, setShowForgotPinView] = useState(false);
       const [loginPinInput, setLoginPinInput] = useState('');
       const [loginError, setLoginError] = useState('');
+      const [showForgotPinView, setShowForgotPinView] = useState(false);
       const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
       const [newPinInput, setNewPinInput] = useState('');
       const [recoveryError, setRecoveryError] = useState('');
-      const [tempApiKey, setTempApiKey] = useState('');
+
+      const [selectedGrade, setSelectedGrade] = useState(2);
+      const [selectedSemester, setSelectedSemester] = useState(1);
 
       const [packages, setPackages] = useState(() => {
         try {
-          const saved = localStorage.getItem('juarakelas_packages_v1');
+          const saved = localStorage.getItem(STORAGE_PACKAGES_KEY);
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -260,101 +451,65 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       });
 
       const [cloudConnected, setCloudConnected] = useState(false);
-      const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
-      const [xpStars, setXpStars] = useState(() => {
-        return Number(localStorage.getItem('juarakelas_xp') || '150');
-      });
-
-      useEffect(() => {
-        try {
-          localStorage.setItem('juarakelas_packages_v1', JSON.stringify(packages));
-        } catch (e) {}
-      }, [packages]);
-
-      // Sinkronisasi Real-Time dengan Firestore Cloud agar soal dari PC muncul di iPad
+      // Sinkronisasi Real-Time Cloud Firestore antar PC & iPad
       useEffect(() => {
         if (!firestoreDb) return;
+        const unsubscribe = firestoreDb
+          .collection(FIRESTORE_COLLECTION)
+          .onSnapshot(
+            (snapshot) => {
+              setCloudConnected(true);
+              const cloudPkgs = [];
+              snapshot.forEach((docSnap) => {
+                cloudPkgs.push({ id: docSnap.id, ...docSnap.data() });
+              });
 
-        let unsubscribe = () => {};
-        try {
-          unsubscribe = firestoreDb
-            .collection(CLOUD_COLLECTION)
-            .onSnapshot(
-              (snapshot) => {
-                setCloudConnected(true);
-                const cloudList = [];
-                snapshot.forEach((doc) => {
-                  const data = doc.data();
-                  if (data && Array.isArray(data.questions)) {
-                    cloudList.push({
-                      ...data,
-                      id: data.id || doc.id
-                    });
-                  }
+              setPackages((prevLocal) => {
+                const map = new Map();
+                map.set(DEFAULT_BUILTIN_PACKAGE.id, DEFAULT_BUILTIN_PACKAGE);
+                prevLocal.forEach((p) => {
+                  if (!p.isBuiltin) map.set(p.id, p);
                 });
-
-                setPackages((prevLocal) => {
-                  const mapById = new Map();
-                  mapById.set(DEFAULT_BUILTIN_PACKAGE.id, DEFAULT_BUILTIN_PACKAGE);
-                  prevLocal.forEach((p) => {
-                    if (p && p.id) mapById.set(p.id, p);
-                  });
-                  cloudList.forEach((c) => {
-                    if (c && c.id) mapById.set(c.id, c);
-                  });
-
-                  return Array.from(mapById.values()).sort(
-                    (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
-                  );
+                cloudPkgs.forEach((p) => {
+                  map.set(p.id, p);
                 });
-              },
-              () => {
-                setCloudConnected(false);
-              }
-            );
-        } catch (e) {
-          setCloudConnected(false);
-        }
+                const merged = Array.from(map.values());
+                merged.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                return merged;
+              });
+            },
+            () => {
+              setCloudConnected(false);
+            }
+          );
 
-        return () => {
-          try {
-            unsubscribe();
-          } catch (e) {}
-        };
+        return () => unsubscribe();
       }, []);
 
-      useEffect(() => {
-        localStorage.setItem('juarakelas_xp', String(xpStars));
-      }, [xpStars]);
-
-      // State Navigasi & Filter
-      const [activeView, setActiveView] = useState('library');
-      const [selectedGrade, setSelectedGrade] = useState(2);
-      const [selectedSemester, setSelectedSemester] = useState(1);
       const [activePackage, setActivePackage] = useState(DEFAULT_BUILTIN_PACKAGE);
       const [packageToDelete, setPackageToDelete] = useState(null);
 
-      // State Pengerjaan Kuis
+      // Quiz Session State
       const [currentIdx, setCurrentIdx] = useState(0);
       const [answers, setAnswers] = useState({});
       const [unsureFlags, setUnsureFlags] = useState({});
       const [quizStartTime, setQuizStartTime] = useState(Date.now());
       const [elapsedDurationText, setElapsedDurationText] = useState('0 menit 0 detik');
 
-      // Timer Mode
+      // Timer Mode State
       const [timerEnabled, setTimerEnabled] = useState(false);
       const [timeLeftSeconds, setTimeLeftSeconds] = useState(15 * 60);
       const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-      // Modal & Status Proses
+      // Modals & Grading
       const [showUploadModal, setShowUploadModal] = useState(false);
       const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
       const [isGrading, setIsGrading] = useState(false);
       const [gradingResults, setGradingResults] = useState(null);
       const [toastMessage, setToastMessage] = useState(null);
 
-      // State Form Upload PDF & Generator
+      // Generator Modal State
       const [genGrade, setGenGrade] = useState(2);
       const [genSemester, setGenSemester] = useState(1);
       const [genSubject, setGenSubject] = useState('');
@@ -370,32 +525,68 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [generatorError, setGeneratorError] = useState('');
       const fileInputRef = useRef(null);
 
+      useEffect(() => {
+        try {
+          localStorage.setItem(STORAGE_PACKAGES_KEY, JSON.stringify(packages));
+        } catch (e) {}
+      }, [packages]);
+
+      useEffect(() => {
+        localStorage.setItem(STORAGE_XP_KEY, String(xpStars));
+      }, [xpStars]);
+
       const triggerToast = (msg, type = 'info') => {
         setToastMessage({ msg, type });
         setTimeout(() => setToastMessage(null), 3800);
       };
 
-      const handleSaveApiKey = (e) => {
-        e.preventDefault();
-        const trimmed = tempApiKey.trim();
-        setGeminiApiKey(trimmed);
-        localStorage.setItem('juarakelas_gemini_key', trimmed);
-        triggerToast('Gemini API Key berhasil disimpan di perangkat ini!', 'success');
+      const handleManualSyncToCloud = async () => {
+        const customPkgs = packages.filter((p) => !p.isBuiltin);
+        if (customPkgs.length === 0) {
+          triggerToast('Belum ada paket soal buatan baru untuk dikirim ke Cloud.', 'info');
+          return;
+        }
+        triggerToast(`Mengirim ${customPkgs.length} paket soal ke Cloud...`, 'info');
+        let okCount = 0;
+        let lastFailReason = '';
+        for (const pkg of customPkgs) {
+          const res = await savePackageToCloud(pkg);
+          if (res.ok) {
+            okCount++;
+          } else {
+            lastFailReason = res.reason || 'Error tidak diketahui';
+          }
+        }
+        if (okCount > 0) {
+          setCloudConnected(true);
+          triggerToast(`${okCount} paket soal tersinkron ke Cloud! Silakan refresh iPad.`, 'success');
+        } else {
+          triggerToast(`Gagal kirim ke Cloud: ${lastFailReason}`, 'warning');
+        }
       };
 
+      const handleSaveApiKey = (e) => {
+        e.preventDefault();
+        const cleaned = tempApiKey.trim();
+        localStorage.setItem(STORAGE_APIKEY_KEY, cleaned);
+        setGeminiApiKey(cleaned);
+        triggerToast('Gemini API Key berhasil disimpan! Fitur AI siap digunakan.', 'success');
+      };
+
+      // Handler Menu Admin & Password
       const openAdminAccess = () => {
         if (isAdminUnlocked) {
           setTempApiKey(geminiApiKey);
           setShowAdminPanelModal(true);
-          return;
+        } else {
+          setLoginPinInput('');
+          setLoginError('');
+          setShowForgotPinView(false);
+          setRecoveryCodeInput('');
+          setNewPinInput('');
+          setRecoveryError('');
+          setShowAdminLoginModal(true);
         }
-        setLoginPinInput('');
-        setLoginError('');
-        setRecoveryCodeInput('');
-        setNewPinInput('');
-        setRecoveryError('');
-        setShowForgotPinView(false);
-        setShowAdminLoginModal(true);
       };
 
       const handleAdminLoginSubmit = (e) => {
@@ -405,31 +596,30 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           setShowAdminLoginModal(false);
           setTempApiKey(geminiApiKey);
           setShowAdminPanelModal(true);
-          triggerToast('Mode Admin terbuka!', 'success');
+          triggerToast('Mode Admin aktif!', 'success');
         } else {
-          setLoginError('Password Admin salah! Coba lagi atau klik "Lupa password?".');
+          setLoginError('Password salah. Silakan coba lagi atau klik "Lupa password?".');
         }
       };
 
       const handleResetPasswordSubmit = (e) => {
         e.preventDefault();
         if (recoveryCodeInput.trim().toUpperCase() !== ADMIN_RECOVERY_CODE) {
-          setRecoveryError(`Kode pemulihan salah! Gunakan kode: ${ADMIN_RECOVERY_CODE}`);
+          setRecoveryError('Kode pemulihan salah! Masukkan kode pemulihan yang benar.');
           return;
         }
-        const cleanedNewPin = newPinInput.trim();
-        if (cleanedNewPin.length < 4) {
+        if (newPinInput.trim().length < 4) {
           setRecoveryError('Password baru minimal 4 karakter ya.');
           return;
         }
-        setAdminPin(cleanedNewPin);
-        localStorage.setItem('juarakelas_admin_pin', cleanedNewPin);
+        const updatedPin = newPinInput.trim();
+        localStorage.setItem(STORAGE_ADMIN_PIN_KEY, updatedPin);
+        setAdminPin(updatedPin);
         setIsAdminUnlocked(true);
         setShowAdminLoginModal(false);
-        setShowForgotPinView(false);
         setTempApiKey(geminiApiKey);
         setShowAdminPanelModal(true);
-        triggerToast('Password Admin berhasil diperbarui & masuk ke Menu Admin!', 'success');
+        triggerToast('Password admin berhasil diperbarui!', 'success');
       };
 
       const handleLockAdmin = () => {
@@ -438,7 +628,6 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         triggerToast('Menu Admin dikunci kembali.', 'info');
       };
 
-      // Timer Countdown
       useEffect(() => {
         if (!timerEnabled || !isTimerRunning || activeView !== 'quiz') return;
         if (timeLeftSeconds <= 0) {
@@ -484,58 +673,11 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         }
       };
 
-      // Mendorong semua paket soal lokal ke Firestore agar langsung muncul di iPad
-      const handleManualSyncToCloud = async () => {
-        if (!firestoreDb) {
-          triggerToast(
-            'Firebase belum aktif. Pastikan Firestore Database sudah dibuat di Firebase Console.',
-            'warning'
-          );
-          return;
-        }
-
-        const customPkgs = packages.filter((p) => !p.isBuiltin);
-        if (customPkgs.length === 0) {
-          triggerToast('Belum ada paket soal buatan sendiri untuk disinkronkan.', 'info');
-          return;
-        }
-
-        let successCount = 0;
-        let lastReason = '';
-        for (const pkg of customPkgs) {
-          const res = await savePackageToCloud(pkg);
-          if (res.ok) {
-            successCount += 1;
-          } else {
-            lastReason = res.reason;
-          }
-        }
-
-        if (successCount > 0) {
-          setCloudConnected(true);
-          triggerToast(
-            `${successCount} paket soal berhasil dikirim ke Cloud! Silakan refresh halaman di iPad.`,
-            'success'
-          );
-        } else {
-          triggerToast(
-            `Gagal kirim ke Cloud (${lastReason}). Cek Firestore Database di Firebase Console ya!`,
-            'warning'
-          );
-        }
-      };
-
       const openUploadModalForCurrentFilter = () => {
-        if (!isAdminUnlocked) {
-          openAdminAccess();
-          triggerToast('Silakan masuk ke Menu Admin dulu untuk upload kisi-kisi.', 'warning');
-          return;
-        }
         if (!geminiApiKey) {
-          setShowUploadModal(false);
-          setTempApiKey(geminiApiKey);
+          setTempApiKey('');
           setShowAdminPanelModal(true);
-          triggerToast('Pasang Gemini API Key di Menu Admin dulu ya sebelum membuat soal!', 'warning');
+          triggerToast('Pasang Gemini API Key dulu di Menu Admin sebelum upload PDF ya!', 'warning');
           return;
         }
         setGenGrade(selectedGrade);
@@ -566,7 +708,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           const { text, numPages } = await extractTextFromPdfFile(file);
           if (!text || text.length < 15) {
             setGeneratorError(
-              'Teks dalam PDF tidak terbaca (kemungkinan PDF berupa gambar hasil scan). Silakan pilih tab "Tempel Teks Manual".'
+              'Teks dalam PDF tidak terbaca (kemungkinan PDF hasil scan). Silakan pilih tab "Tempel Teks Manual".'
             );
             setIsExtractingPdf(false);
             return;
@@ -581,15 +723,17 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           if (!genSubject) {
             const lower = cleanName.toLowerCase();
             if (lower.includes('english') || lower.includes('inggris')) setGenSubject('Bahasa Inggris');
-            else if (lower.includes('arabic') || lower.includes('arab')) setGenSubject('Bahasa Arab');
             else if (lower.includes('matematika') || lower.includes('mtk')) setGenSubject('Matematika');
             else if (lower.includes('ipas') || lower.includes('ipa')) setGenSubject('IPAS');
             else if (lower.includes('indonesia')) setGenSubject('Bahasa Indonesia');
+            else if (lower.includes('pai') || lower.includes('agama') || lower.includes('quran'))
+              setGenSubject('Pendidikan Agama Islam');
+            else if (lower.includes('arab')) setGenSubject('Bahasa Arab');
           }
 
           triggerToast(`Berhasil membaca ${numPages} halaman dari ${file.name}!`, 'success');
         } catch (err) {
-          setGeneratorError(`Gagal membaca file PDF: ${err?.message || 'Error tidak diketahui'}`);
+          setGeneratorError(`Gagal membaca file PDF: ${err.message}`);
         } finally {
           setIsExtractingPdf(false);
         }
@@ -599,7 +743,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         if (e) e.preventDefault();
         if (!geminiApiKey) {
           setShowUploadModal(false);
-          setShowApiKeyModal(true);
+          setShowAdminPanelModal(true);
           return;
         }
         if (!kisiKisiText.trim()) {
@@ -614,16 +758,16 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         setIsGenerating(true);
         setGeneratorError('');
 
-        const systemPrompt = `Kamu adalah Guru SD profesional di Indonesia dan pembuat soal edukatif bergaya ceria ramah anak seperti "Juara Kelas".
+        const systemPrompt = `Kamu adalah Guru SD profesional di Indonesia dan pembuat soal edukatif bergaya ceria ramah anak seperti "Juara Kelas SD".
 Tugasmu membuat paket soal latihan berdasarkan Kisi-Kisi PDF yang diberikan orang tua/guru.
 Aturan wajib:
 1. Buat tepat ${genPgCount} soal Pilihan Ganda (type: "pg") dan ${genEssayCount} soal Esai / Isian Singkat (type: "essay") sesuai indikator kisi-kisi.
 2. Sesuaikan tingkat kesulitan kosakata dan kalimat dengan siswa Kelas ${genGrade} SD (Semester ${genSemester}).
-3. Bahasa soal menyesuaikan mata pelajaran (jika Bahasa Inggris, pertanyaan & pilihan memakai Bahasa Inggris level SD yang ramah anak, tetapi "explanation" dan "trapWarning" wajib dalam Bahasa Indonesia yang ceria, jelas, dan mudah dipahami anak SD).
-4. Jika soal membutuhkan ilustrasi/gambar, isi field "visualEmoji" dengan rangkaian emoji kontekstual yang jelas dan "visualCaption" dengan keterangan gambar singkat agar siswa bisa menjawab tanpa gambar eksternal. Jika tidak butuh ilustrasi, isi string kosong "".
+3. Bahasa soal menyesuaikan mata pelajaran (jika Bahasa Inggris/Arab, pertanyaan & pilihan memakai bahasa pelajaran tersebut yang ramah anak, tetapi "explanation" dan "trapWarning" wajib dalam Bahasa Indonesia yang ceria dan mudah dipahami).
+4. Jika soal membutuhkan ilustrasi/gambar (misalnya "Disajikan gambar...", "Disajikan ilustrasi..."), isi field "visualEmoji" dengan rangkaian emoji kontekstual dan "visualCaption" dengan keterangan singkat. Jika tidak butuh ilustrasi, isi string kosong "".
 5. Untuk soal Pilihan Ganda ("pg"), sediakan tepat 4 opsi ("A", "B", "C", "D") dan tentukan "correctAnswer" ("A", "B", "C", atau "D").
 6. Untuk soal Esai ("essay"), kosongkan array "options" ([]), isi "correctAnswer" dan "sampleAnswer" dengan kunci jawaban singkat yang benar.
-7. Field "explanation" wajib berisi pembahasan langkah demi langkah ramah anak ("Langkah 1: ... Langkah 2: ...").
+7. Field "explanation" wajib berisi pembahasan langkah demi langkah ramah anak.
 8. Field "trapWarning" wajib berisi tips peringatan kesalahan umum yang sering menjebak siswa.`;
 
         const userQuery = `Mata Pelajaran: ${finalSubject}
@@ -717,25 +861,19 @@ ${kisiKisiText.slice(0, 28000)}`;
             questions: normalizedQuestions
           };
 
-          setPackages((prev) => [newPackageObj, ...prev.filter((p) => p.id !== newPackageObj.id)]);
+          setPackages((prev) => [newPackageObj, ...prev]);
           const cloudRes = await savePackageToCloud(newPackageObj);
           setSelectedGrade(Number(genGrade));
           setSelectedSemester(Number(genSemester));
           setShowUploadModal(false);
           setActiveView('library');
 
-          if (cloudRes.ok) {
-            setCloudConnected(true);
-            triggerToast(
-              `Hore! Paket soal tersimpan di Cloud & Kelas ${genGrade} • Semester ${genSemester}!`,
-              'success'
-            );
-          } else {
-            triggerToast(
-              `Tersimpan lokal, namun Cloud gagal (${cloudRes.reason}). Aktifkan Firestore Database di Firebase!`,
-              'warning'
-            );
-          }
+          triggerToast(
+            cloudRes.ok
+              ? `Hore! Paket soal tersimpan & otomatis tersinkron ke iPad!`
+              : `Paket soal tersimpan lokal (Cloud: ${cloudRes.reason})`,
+            cloudRes.ok ? 'success' : 'warning'
+          );
         } catch (err) {
           setGeneratorError(
             `Gagal membuat soal: ${err.message}. Pastikan Gemini API Key kamu benar dan aktif ya.`
@@ -944,34 +1082,34 @@ Aturan penilaian fleksibel:
       return (
         <div className="min-h-screen flex flex-col justify-between">
           <div className="pb-14">
-          {/* HEADER */}
-          <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b-2 border-sky-100 shadow-sm">
+          {/* HEADER KACA SEMI-TRANSPARAN */}
+          <header className="sticky top-0 z-30 bg-[#17193b]/80 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-black/20">
             <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
               <button
                 onClick={() => {
                   setIsTimerRunning(false);
                   setActiveView('library');
                 }}
-                className="flex items-center gap-2.5 text-left group focus:outline-none"
+                className="flex items-center gap-3 text-left group focus:outline-none"
               >
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white text-xl shadow-md shadow-sky-200">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#f26d5b] to-amber-400 flex items-center justify-center text-white text-xl shadow-md shadow-rose-950/40 group-hover:scale-105 transition-transform">
                   🎓
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
-                      Juara <span className="text-sky-600">Kelas</span>
+                    <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white">
+                      Juara <span className="text-amber-300">Kelas</span>
                     </h1>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400/20 text-amber-200 border border-amber-300/30">
                       ⭐ {xpStars} XP
                     </span>
                     {cloudConnected && (
-                      <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                      <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-400/20 text-sky-200 border border-sky-300/30">
                         ☁️ Cloud Sync
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-semibold text-slate-500">
+                  <p className="text-xs font-semibold text-indigo-200/80">
                     {activeView === 'library'
                       ? 'Bank Soal & Kisi-Kisi Pintar Kelas 1 – 6 SD'
                       : `Kelas ${activePackage.grade} • Semester ${activePackage.semester} • ${activePackage.subject}`}
@@ -987,16 +1125,16 @@ Aturan penilaian fleksibel:
                         setIsTimerRunning(false);
                         setActiveView('library');
                       }}
-                      className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 backdrop-blur-md transition-all"
                     >
                       ← Daftar Paket
                     </button>
                     <button
                       onClick={handleToggleTimerMode}
-                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border-2 shadow-sm ${
+                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border backdrop-blur-md shadow-sm transition-all ${
                         timerEnabled
-                          ? 'bg-rose-50 border-rose-300 text-rose-700'
-                          : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          ? 'bg-rose-500/25 border-rose-400/50 text-rose-200'
+                          : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
                       }`}
                     >
                       {timerEnabled ? `⏱️ Waktu: ${formatTime(timeLeftSeconds)}` : '🌿 Mode Santai'}
@@ -1007,7 +1145,7 @@ Aturan penilaian fleksibel:
                     <button
                       type="button"
                       onClick={openAdminAccess}
-                      className="px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-800 transition-all"
+                      className="px-4 py-2 rounded-xl text-xs font-extrabold border border-white/20 bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-all"
                       title="Buka menu khusus admin"
                     >
                       {isAdminUnlocked ? '🔓 Menu Admin' : '🔒 Admin'}
@@ -1022,12 +1160,12 @@ Aturan penilaian fleksibel:
           {toastMessage && (
             <div className="fixed bottom-5 right-5 z-50">
               <div
-                className={`px-4 py-3 rounded-2xl shadow-lg border-2 font-bold text-sm ${
+                className={`px-4 py-3 rounded-2xl shadow-xl border font-bold text-sm backdrop-blur-md ${
                   toastMessage.type === 'success'
-                    ? 'bg-emerald-600 border-emerald-400 text-white'
+                    ? 'bg-emerald-600/95 border-emerald-400 text-white'
                     : toastMessage.type === 'warning'
-                    ? 'bg-amber-500 border-amber-300 text-white'
-                    : 'bg-sky-600 border-sky-400 text-white'
+                    ? 'bg-amber-500/95 border-amber-300 text-white'
+                    : 'bg-indigo-600/95 border-indigo-400 text-white'
                 }`}
               >
                 😊 {toastMessage.msg}
@@ -1037,35 +1175,42 @@ Aturan penilaian fleksibel:
 
           {/* VIEW 1: LIBRARY PER KELAS & SEMESTER */}
           {activeView === 'library' && (
-            <main className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
-              <div className="bg-white rounded-3xl border-2 border-sky-100 shadow-sm p-5 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-                <div className="space-y-1.5">
-                  <span className="inline-block px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-extrabold">
-                    ✨ Belajar Ceria Berbasis Kisi-Kisi Sekolah
+            <main className="max-w-6xl mx-auto px-4 pt-7 space-y-6">
+              {/* HERO BANNER SEMI-TRANSPARAN */}
+              <div className="bg-white/[0.07] backdrop-blur-xl rounded-3xl border border-white/15 shadow-2xl shadow-black/20 p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                <div className="space-y-2.5">
+                  <span className="inline-block text-xs font-extrabold tracking-widest uppercase text-amber-300">
+                    ✨ BELAJAR CERIA BERBASIS KISI-KISI SEKOLAH
                   </span>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-                    Pilih Kelas & Semester untuk Mulai Latihan!
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
+                    Anak lain cuma tahu salah.{' '}
+                    <span className="block sm:inline">
+                      Anakmu tahu{' '}
+                      <span className="inline-block px-2.5 py-0.5 rounded-xl bg-[#f26d5b] text-white shadow-sm">
+                        kenapa.
+                      </span>
+                    </span>
                   </h2>
-                  <p className="text-sm text-slate-600 max-w-2xl">
-                    Pilih jenjang Kelas dan Semester di bawah ini untuk mengerjakan paket latihan soal
-                    yang sudah tersedia.
+                  <p className="text-sm text-indigo-100/85 max-w-2xl">
+                    Pilih jenjang Kelas dan Semester di bawah ini untuk memulai latihan soal lengkap
+                    dengan pembahasan langkah demi langkah dan tips awas jebakan.
                   </p>
                 </div>
 
                 {isAdminUnlocked && (
                   <button
                     onClick={openUploadModalForCurrentFilter}
-                    className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-200"
+                    className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-[#f26d5b] to-amber-500 hover:from-[#e05b49] hover:to-amber-600 text-white font-extrabold text-sm shadow-lg shadow-rose-950/40 transition-all"
                   >
                     📄 + Upload PDF Kisi-Kisi Baru
                   </button>
                 )}
               </div>
 
-              {/* FILTER KELAS & SEMESTER */}
-              <div className="bg-white rounded-3xl border-2 border-sky-100 shadow-sm p-5 space-y-5">
+              {/* FILTER KELAS & SEMESTER (KACA SEMI-TRANSPARAN) */}
+              <div className="bg-white/[0.07] backdrop-blur-xl rounded-3xl border border-white/15 shadow-xl shadow-black/20 p-5 sm:p-6 space-y-5">
                 <div>
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block mb-2.5">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200 block mb-3">
                     1. Pilih Jenjang Kelas SD:
                   </span>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
@@ -1077,14 +1222,14 @@ Aturan penilaian fleksibel:
                           key={gradeNum}
                           type="button"
                           onClick={() => setSelectedGrade(gradeNum)}
-                          className={`py-3 px-3 rounded-2xl border-2 font-extrabold text-sm transition-all flex flex-col items-center justify-center gap-0.5 ${
+                          className={`py-3 px-3 rounded-2xl border font-extrabold text-sm transition-all flex flex-col items-center justify-center gap-0.5 backdrop-blur-md ${
                             isActive
-                              ? 'bg-sky-600 border-sky-600 text-white shadow-md shadow-sky-200'
-                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-sky-300'
+                              ? 'bg-[#f26d5b] border-rose-300/60 text-white shadow-lg shadow-rose-950/40 scale-[1.02]'
+                              : 'bg-white/[0.06] border-white/15 text-indigo-100 hover:bg-white/[0.14] hover:border-white/30'
                           }`}
                         >
                           <span>Kelas {gradeNum}</span>
-                          <span className={`text-[11px] font-bold ${isActive ? 'text-sky-100' : 'text-slate-400'}`}>
+                          <span className={`text-[11px] font-bold ${isActive ? 'text-rose-100' : 'text-indigo-300/80'}`}>
                             {countInGrade} Paket
                           </span>
                         </button>
@@ -1093,12 +1238,12 @@ Aturan penilaian fleksibel:
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block mb-2">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200 block mb-2">
                       2. Pilih Semester:
                     </span>
-                    <div className="inline-flex p-1.5 rounded-2xl bg-slate-100 border border-slate-200">
+                    <div className="inline-flex p-1.5 rounded-2xl bg-black/25 border border-white/10 backdrop-blur-md">
                       {[
                         { val: 1, label: '📅 Semester 1 (Ganjil)' },
                         { val: 2, label: '📅 Semester 2 (Genap)' }
@@ -1109,8 +1254,8 @@ Aturan penilaian fleksibel:
                           onClick={() => setSelectedSemester(sem.val)}
                           className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all ${
                             selectedSemester === sem.val
-                              ? 'bg-white text-indigo-700 shadow-sm'
-                              : 'text-slate-600 hover:text-slate-900'
+                              ? 'bg-white text-slate-900 shadow-md'
+                              : 'text-indigo-200 hover:text-white'
                           }`}
                         >
                           {sem.label}
@@ -1119,9 +1264,9 @@ Aturan penilaian fleksibel:
                     </div>
                   </div>
 
-                  <div className="text-xs sm:text-sm font-bold text-slate-600 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-2xl">
+                  <div className="text-xs sm:text-sm font-bold text-amber-100 bg-amber-400/15 border border-amber-300/30 px-4 py-2.5 rounded-2xl backdrop-blur-md">
                     Menampilkan:{' '}
-                    <span className="text-indigo-700 font-extrabold">
+                    <span className="text-amber-300 font-extrabold">
                       Kelas {selectedGrade} SD • Semester {selectedSemester}
                     </span>{' '}
                     ({filteredPackages.length} Paket)
@@ -1129,7 +1274,7 @@ Aturan penilaian fleksibel:
                 </div>
               </div>
 
-              {/* DAFTAR PAKET SOAL */}
+              {/* DAFTAR PAKET SOAL (KARTU KREM HANGAT SEPERTI REFERENSI AGAR NYAMAN DIBACA) */}
               {filteredPackages.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {filteredPackages.map((pkg) => {
@@ -1138,7 +1283,7 @@ Aturan penilaian fleksibel:
                     return (
                       <div
                         key={pkg.id}
-                        className="bg-white rounded-3xl border-2 border-sky-100 hover:border-indigo-300 shadow-sm p-5 sm:p-6 flex flex-col justify-between gap-4"
+                        className="bg-[#fffdf7] text-slate-800 rounded-3xl border-2 border-amber-100/90 hover:border-amber-300 shadow-xl shadow-black/25 p-5 sm:p-6 flex flex-col justify-between gap-4 transition-all"
                       >
                         <div>
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -1146,12 +1291,12 @@ Aturan penilaian fleksibel:
                               <span className="px-3 py-1 rounded-xl bg-indigo-100 text-indigo-800 font-extrabold text-xs">
                                 {pkg.subject}
                               </span>
-                              <span className="px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 font-bold text-xs">
+                              <span className="px-2.5 py-1 rounded-xl bg-amber-100/80 text-amber-900 border border-amber-200 font-bold text-xs">
                                 Kls {pkg.grade} • Sem {pkg.semester}
                               </span>
                             </div>
                             {pkg.bestScore !== null && pkg.bestScore !== undefined ? (
-                              <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-xs border border-amber-200">
+                              <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs border border-emerald-200">
                                 🏆 Skor Terbaik: {pkg.bestScore}
                               </span>
                             ) : (
@@ -1166,26 +1311,26 @@ Aturan penilaian fleksibel:
                           </h3>
 
                           {pkg.sourcePdfName && (
-                            <div className="text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80 mb-3 truncate">
+                            <div className="text-xs font-semibold text-slate-600 bg-amber-50/80 px-3 py-1.5 rounded-xl border border-amber-200/70 mb-3 truncate">
                               📄 Sumber: {pkg.sourcePdfName}
                             </div>
                           )}
 
                           <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
-                            <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800">
+                            <span className="px-2.5 py-1 rounded-lg bg-sky-100/80 text-sky-900">
                               {pgCount} Pilihan Ganda
                             </span>
-                            <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800">
+                            <span className="px-2.5 py-1 rounded-lg bg-purple-100/80 text-purple-900">
                               {essayCount} Esai / Isian
                             </span>
                           </div>
                         </div>
 
-                        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                        <div className="pt-4 border-t border-amber-200/60 flex items-center justify-between gap-3">
                           <button
                             type="button"
                             onClick={() => handleStartPackage(pkg)}
-                            className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-extrabold text-sm shadow-md shadow-sky-200"
+                            className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-[#f26d5b] to-amber-500 hover:from-[#e05b49] hover:to-amber-600 text-white font-extrabold text-sm shadow-md shadow-rose-200 transition-all"
                           >
                             ▶️ Mulai Latihan
                           </button>
@@ -1193,7 +1338,7 @@ Aturan penilaian fleksibel:
                             <button
                               type="button"
                               onClick={() => setPackageToDelete(pkg)}
-                              className="p-3 rounded-2xl border-2 border-rose-100 text-rose-500 hover:bg-rose-50 font-bold text-xs"
+                              className="p-3 rounded-2xl border-2 border-rose-200 text-rose-500 hover:bg-rose-50 font-bold text-xs"
                               title="Hapus paket soal (Khusus Admin)"
                             >
                               🗑️
@@ -1205,12 +1350,12 @@ Aturan penilaian fleksibel:
                   })}
                 </div>
               ) : (
-                <div className="bg-white rounded-3xl border-2 border-dashed border-sky-200 p-10 text-center space-y-4">
+                <div className="bg-white/[0.07] backdrop-blur-xl rounded-3xl border border-dashed border-white/25 p-10 text-center space-y-4">
                   <div className="text-5xl">📂</div>
-                  <h3 className="text-lg font-extrabold text-slate-900">
+                  <h3 className="text-lg font-extrabold text-white">
                     Belum Ada Paket Soal untuk Kelas {selectedGrade} • Semester {selectedSemester}
                   </h3>
-                  <p className="text-sm text-slate-500 max-w-md mx-auto">
+                  <p className="text-sm text-indigo-200 max-w-md mx-auto">
                     {isAdminUnlocked
                       ? `Yuk unggah file PDF kisi-kisi pelajaran untuk Kelas ${selectedGrade} Semester ${selectedSemester}, dan biarkan Gemini AI membuatkan soal latihannya!`
                       : `Belum ada soal latihan untuk Kelas ${selectedGrade} Semester ${selectedSemester} saat ini. Silakan pilih kelas atau semester lain ya.`}
@@ -1219,7 +1364,7 @@ Aturan penilaian fleksibel:
                     <button
                       type="button"
                       onClick={openUploadModalForCurrentFilter}
-                      className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-sm shadow-md shadow-indigo-200"
+                      className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#f26d5b] to-amber-500 text-white font-extrabold text-sm shadow-lg"
                     >
                       📄 Upload Kisi-Kisi PDF Sekarang
                     </button>
@@ -1232,19 +1377,19 @@ Aturan penilaian fleksibel:
           {/* VIEW 2: QUIZ MODE */}
           {activeView === 'quiz' && currentQuestion && (
             <main className="max-w-6xl mx-auto px-4 pt-6">
-              <div className="bg-white rounded-2xl p-4 mb-6 border-2 border-sky-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-4 mb-6 border border-white/15 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="px-3 py-1 rounded-xl bg-sky-100 text-sky-800 font-extrabold text-xs sm:text-sm">
+                  <span className="px-3 py-1 rounded-xl bg-amber-400/20 text-amber-200 border border-amber-300/30 font-extrabold text-xs sm:text-sm">
                     Soal {currentIdx + 1} dari {activePackage.questions.length}
                   </span>
-                  <span className="text-xs sm:text-sm font-semibold text-slate-600">
-                    Terjawab: <strong className="text-indigo-600">{answeredCount}</strong> /{' '}
+                  <span className="text-xs sm:text-sm font-semibold text-indigo-100">
+                    Terjawab: <strong className="text-amber-300">{answeredCount}</strong> /{' '}
                     {activePackage.questions.length}
                   </span>
                 </div>
-                <div className="w-full sm:w-64 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                <div className="w-full sm:w-64 h-3 bg-black/30 rounded-full overflow-hidden border border-white/15">
                   <div
-                    className="h-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-[#f26d5b] to-amber-400 transition-all duration-300"
                     style={{
                       width: `${Math.round((answeredCount / activePackage.questions.length) * 100)}%`
                     }}
@@ -1253,7 +1398,8 @@ Aturan penilaian fleksibel:
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <div className="lg:col-span-8 bg-white rounded-3xl border-2 border-sky-100 shadow-md p-5 sm:p-8">
+                {/* KARTU SOAL UTAMA (KREM HANGAT SEPERTI REFERENSI) */}
+                <div className="lg:col-span-8 bg-[#fffdf7] text-slate-800 rounded-3xl border-2 border-amber-100 shadow-2xl shadow-black/30 p-5 sm:p-8">
                   <div className="flex flex-wrap items-center gap-2 mb-5">
                     <span className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-extrabold text-sm">
                       No. {currentIdx + 1}
@@ -1267,7 +1413,7 @@ Aturan penilaian fleksibel:
                     >
                       {currentQuestion.type === 'pg' ? 'Pilihan Ganda' : 'Esai / Isian'}
                     </span>
-                    <span className="px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-bold text-xs sm:text-sm">
+                    <span className="px-3.5 py-1.5 rounded-xl bg-amber-100/80 text-amber-900 border border-amber-200 font-bold text-xs sm:text-sm">
                       📚 {currentQuestion.unit}
                     </span>
                     {unsureFlags[currentQuestion.id] && (
@@ -1278,15 +1424,15 @@ Aturan penilaian fleksibel:
                   </div>
 
                   {(currentQuestion.visualEmoji || currentQuestion.visualCaption) && (
-                    <div className="mb-6 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50/70 border-2 border-dashed border-sky-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="mb-6 rounded-2xl bg-amber-50/70 border-2 border-dashed border-amber-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
                       {currentQuestion.visualEmoji && (
-                        <div className="text-4xl sm:text-5xl bg-white px-5 py-3.5 rounded-2xl shadow-sm border border-sky-100 shrink-0">
+                        <div className="text-4xl sm:text-5xl bg-white px-5 py-3.5 rounded-2xl shadow-sm border border-amber-100 shrink-0">
                           {currentQuestion.visualEmoji}
                         </div>
                       )}
                       {currentQuestion.visualCaption && (
                         <div className="text-center sm:text-left">
-                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-sky-600 block mb-0.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-700 block mb-0.5">
                             Ilustrasi Gambar
                           </span>
                           <p className="text-sm sm:text-base font-medium text-slate-700">
@@ -1316,15 +1462,15 @@ Aturan penilaian fleksibel:
                             }
                             className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center gap-3.5 ${
                               isSelected
-                                ? 'bg-indigo-50 border-indigo-500 shadow-md shadow-indigo-100'
-                                : 'bg-white border-slate-200 hover:border-sky-400'
+                                ? 'bg-rose-50 border-[#f26d5b] shadow-md shadow-rose-100'
+                                : 'bg-amber-50/50 border-amber-200/70 hover:border-[#f26d5b]/60'
                             }`}
                           >
                             <span
                               className={`w-10 h-10 rounded-xl font-extrabold text-base flex items-center justify-center shrink-0 ${
                                 isSelected
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-slate-100 text-slate-700'
+                                  ? 'bg-[#f26d5b] text-white'
+                                  : 'bg-white text-slate-700 border border-amber-200'
                               }`}
                             >
                               {opt.key}
@@ -1348,12 +1494,12 @@ Aturan penilaian fleksibel:
                           setAnswers((prev) => ({ ...prev, [currentQuestion.id]: e.target.value }))
                         }
                         placeholder="Tulis jawabanmu di sini..."
-                        className="w-full p-4 rounded-2xl border-2 border-purple-200 focus:border-purple-500 outline-none text-base sm:text-lg font-bold text-slate-800 bg-purple-50/20"
+                        className="w-full p-4 rounded-2xl border-2 border-amber-200 focus:border-[#f26d5b] outline-none text-base sm:text-lg font-bold text-slate-800 bg-white"
                       />
                     </div>
                   )}
 
-                  <div className="pt-5 border-t-2 border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                  <div className="pt-5 border-t-2 border-amber-100 flex flex-wrap items-center justify-between gap-3">
                     <button
                       type="button"
                       disabled={currentIdx === 0}
@@ -1388,7 +1534,7 @@ Aturan penilaian fleksibel:
                             Math.min(activePackage.questions.length - 1, prev + 1)
                           )
                         }
-                        className="px-5 py-2.5 rounded-xl font-bold text-sm bg-sky-600 text-white hover:bg-sky-700"
+                        className="px-5 py-2.5 rounded-xl font-bold text-sm bg-indigo-600 text-white hover:bg-indigo-700"
                       >
                         Selanjutnya →
                       </button>
@@ -1403,14 +1549,233 @@ Aturan penilaian fleksibel:
                     )}
                   </div>
                 </div>
+
+                {/* PANEL NAVIGASI NOMOR SOAL (KACA SEMI-TRANSPARAN) */}
+                <aside className="lg:col-span-4 bg-white/[0.08] backdrop-blur-xl rounded-3xl border border-white/15 shadow-xl p-5 sm:p-6 sticky top-24">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-extrabold text-base text-white">
+                      🧭 Navigasi Nomor Soal
+                    </h2>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white/10 text-indigo-100">
+                      {activePackage.questions.length} Soal
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-2.5 mb-5">
+                    {activePackage.questions.map((q, idx) => {
+                      const isCurrent = idx === currentIdx;
+                      const isAnswered = Boolean(answers[q.id] && answers[q.id].trim().length > 0);
+                      const isUnsure = Boolean(unsureFlags[q.id]);
+
+                      let btnStyle =
+                        'bg-white/10 border-white/15 text-indigo-100 hover:bg-white/20';
+                      if (isUnsure) {
+                        btnStyle = 'bg-amber-400 border-amber-300 text-slate-900';
+                      } else if (isAnswered) {
+                        btnStyle = 'bg-[#f26d5b] border-rose-300 text-white';
+                      }
+
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => setCurrentIdx(idx)}
+                          className={`h-11 rounded-xl font-extrabold text-sm border transition-all relative flex items-center justify-center ${btnStyle} ${
+                            isCurrent ? 'ring-4 ring-amber-300/70 scale-105 z-10' : ''
+                          }`}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitConfirm(true)}
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-extrabold text-sm shadow-lg"
+                  >
+                    ✅ Kumpulkan & Cek Nilai
+                  </button>
+                </aside>
+              </div>
+            </main>
+          )}
+
+          {/* VIEW 3: HASIL, SKOR & PEMBAHASAN LENGKAP */}
+          {activeView === 'results' && gradingResults && (
+            <main className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
+              <div className="bg-[#fffdf7] text-slate-800 rounded-3xl border-2 border-amber-200 shadow-2xl p-6 sm:p-8 text-center">
+                <div className="text-5xl mb-2">🏆</div>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                  {getEncouragementMessage(gradingResults.finalScore)}
+                </h2>
+                <p className="text-xs sm:text-sm font-bold text-slate-500 mt-1">
+                  {activePackage.title} • Waktu pengerjaan: {elapsedDurationText}
+                </p>
+
+                <div className="flex items-center justify-center gap-1.5 my-3 text-2xl">
+                  {[1, 2, 3, 4, 5].map((starIdx) => (
+                    <span key={starIdx}>
+                      {starIdx <= getStarCount(gradingResults.finalScore) ? '⭐' : '☆'}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="my-5 inline-flex flex-wrap items-center justify-center gap-6 bg-amber-50 border-2 border-amber-200/80 px-8 py-4 rounded-3xl">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block">
+                      Nilai Akhir
+                    </span>
+                    <span className="text-4xl sm:text-5xl font-black text-[#f26d5b]">
+                      {gradingResults.finalScore}
+                    </span>
+                    <span className="text-sm font-bold text-slate-400"> / 100</span>
+                  </div>
+
+                  <div className="h-10 w-px bg-amber-200 hidden sm:block" />
+
+                  <div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block">
+                      Jawaban Tepat
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-black text-emerald-600">
+                      {gradingResults.correctCount}
+                    </span>
+                    <span className="text-sm font-bold text-slate-500">
+                      {' '}
+                      dari {gradingResults.totalQuestions} soal
+                    </span>
+                  </div>
+
+                  <div className="h-10 w-px bg-amber-200 hidden sm:block" />
+
+                  <div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block">
+                      Bonus XP
+                    </span>
+                    <span className="text-2xl sm:text-3xl font-black text-amber-500">
+                      +{gradingResults.earnedStars} ⭐
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleStartPackage(activePackage)}
+                    className="px-6 py-3 rounded-2xl bg-[#f26d5b] hover:bg-[#e05b49] text-white font-extrabold text-sm shadow-md"
+                  >
+                    🔄 Ulangi Paket Ini
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('library')}
+                    className="px-6 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-2 border-indigo-200 font-extrabold text-sm"
+                  >
+                    📂 Kembali ke Daftar Kelas & Semester
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <h3 className="text-lg sm:text-xl font-extrabold text-white px-1">
+                  💡 Pembahasan Lengkap & Tips Awas Jebakan
+                </h3>
+
+                {gradingResults.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`bg-[#fffdf7] text-slate-800 rounded-3xl border-2 p-5 sm:p-7 shadow-xl ${
+                      item.isCorrect ? 'border-emerald-300' : 'border-rose-300'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-xl bg-slate-800 text-white font-extrabold text-xs">
+                          Soal No. {item.number}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500">{item.unit}</span>
+                      </div>
+
+                      {item.isCorrect ? (
+                        <span className="px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs">
+                          ✅ Benar (+{item.score} poin)
+                        </span>
+                      ) : (
+                        <span className="px-3.5 py-1 rounded-full bg-rose-100 text-rose-800 font-extrabold text-xs">
+                          ❌ Perlu Diperbaiki ({item.score} poin)
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-base sm:text-lg font-bold text-slate-800 mb-4 whitespace-pre-line">
+                      {item.question}
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                      <div
+                        className={`p-3.5 rounded-2xl border ${
+                          item.isCorrect
+                            ? 'bg-emerald-50 border-emerald-200'
+                            : 'bg-rose-50 border-rose-200'
+                        }`}
+                      >
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block mb-1">
+                          Jawaban Kamu:
+                        </span>
+                        <p
+                          className={`font-bold text-sm sm:text-base ${
+                            item.isCorrect ? 'text-emerald-800' : 'text-rose-800'
+                          }`}
+                        >
+                          {item.userAnswerDisplay}
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-sky-700 block mb-1">
+                          Kunci Jawaban:
+                        </span>
+                        <p className="font-bold text-sm sm:text-base text-sky-950">
+                          {item.correctAnswerDisplay}
+                        </p>
+                      </div>
+                    </div>
+
+                    {item.aiFeedback && (
+                      <div className="mb-4 p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-purple-900 text-sm font-semibold">
+                        ✨ <strong>Catatan Guru AI:</strong> {item.aiFeedback}
+                      </div>
+                    )}
+
+                    <div className="mb-3.5 p-4 rounded-2xl bg-amber-50/90 border border-amber-200">
+                      <div className="text-amber-900 font-extrabold text-sm mb-1">
+                        💡 Pembahasan Langkah demi Langkah
+                      </div>
+                      <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-line font-medium">
+                        {item.explanation || item.pembahasan}
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-rose-50/90 border border-rose-200">
+                      <div className="text-rose-900 font-extrabold text-sm mb-1">
+                        ⚠️ Awas Jebakan!
+                      </div>
+                      <p className="text-sm text-rose-950 leading-relaxed font-medium">
+                        {item.trapWarning || item.awasJebakan}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </main>
           )}
 
           {/* MODAL LOGIN ADMIN & LUPA PASSWORD */}
           {showAdminLoginModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl max-w-md w-full p-6 border-2 border-indigo-100 shadow-2xl">
+            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 border-2 border-indigo-100 shadow-2xl">
                 {!showForgotPinView ? (
                   <>
                     <div className="flex items-center justify-between mb-2">
@@ -1544,8 +1909,8 @@ Aturan penilaian fleksibel:
 
           {/* MODAL PANEL ADMIN (API KEY, SYNC IPAD, UPLOAD PDF) */}
           {showAdminPanelModal && isAdminUnlocked && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-white rounded-3xl max-w-lg w-full p-6 border-2 border-indigo-100 shadow-2xl space-y-5 my-auto">
+            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white text-slate-800 rounded-3xl max-w-lg w-full p-6 border-2 border-indigo-100 shadow-2xl space-y-5 my-auto">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="text-lg font-extrabold text-slate-900">
@@ -1633,8 +1998,8 @@ Aturan penilaian fleksibel:
 
           {/* MODAL UPLOAD PDF */}
           {showUploadModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-              <div className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-8 border-2 border-indigo-100 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+              <div className="bg-white text-slate-800 rounded-3xl max-w-3xl w-full p-5 sm:p-8 border-2 border-indigo-100 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
                 <div className="flex items-start justify-between gap-4 pb-4 mb-5 border-b-2 border-slate-100">
                   <div>
                     <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
@@ -1858,8 +2223,8 @@ Aturan penilaian fleksibel:
 
           {/* MODAL KONFIRMASI HAPUS */}
           {packageToDelete && isAdminUnlocked && (
-            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl max-w-md w-full p-6 border-2 border-rose-100 shadow-2xl text-center">
+            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 border-2 border-rose-100 shadow-2xl text-center">
                 <h3 className="text-lg font-extrabold text-slate-900 mb-2">Hapus Paket Soal Ini?</h3>
                 <p className="text-sm text-slate-600 mb-5">
                   Paket <strong>"{packageToDelete.title}"</strong> akan dihapus.
@@ -1893,8 +2258,8 @@ Aturan penilaian fleksibel:
 
           {/* MODAL KONFIRMASI KUMPULKAN */}
           {showSubmitConfirm && (
-            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-sky-100 shadow-2xl text-center">
+            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-sky-100 shadow-2xl text-center">
                 <div className="text-4xl mb-3">✅</div>
                 <h3 className="text-xl font-extrabold text-slate-900 mb-2">
                   Sudah Yakin Ingin Mengumpulkan?
@@ -1927,8 +2292,8 @@ Aturan penilaian fleksibel:
 
           {/* LOADING OVERLAY SAAT MENGOREKSI */}
           {isGrading && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl max-w-sm w-full p-7 border-2 border-indigo-100 shadow-2xl text-center">
+            <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-white text-slate-800 rounded-3xl max-w-sm w-full p-7 border-2 border-indigo-100 shadow-2xl text-center">
                 <div className="text-4xl animate-spin mb-4">⏳</div>
                 <h3 className="text-lg font-extrabold text-slate-900 mb-1.5">
                   Sebentar Ya, Sedang Mengoreksi...
@@ -1941,7 +2306,7 @@ Aturan penilaian fleksibel:
           )}
           </div>
 
-          <footer className="py-5 px-4 text-center text-xs font-bold text-slate-500 border-t border-sky-100 bg-white/70">
+          <footer className="py-5 px-4 text-center text-xs font-bold text-indigo-200/75 border-t border-white/10 bg-[#12132e]/80 backdrop-blur-md">
             Copyright Tommydomeh 2026
           </footer>
         </div>
