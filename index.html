@@ -412,6 +412,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const ADMIN_RECOVERY_CODE = 'TOMMY2026';
 
       const [activeView, setActiveView] = useState('library');
+      const isHandlingPopStateRef = useRef(false);
       const [xpStars, setXpStars] = useState(() => {
         const saved = localStorage.getItem(STORAGE_XP_KEY);
         return saved ? Number(saved) : 150;
@@ -552,6 +553,66 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         return () => clearInterval(interval);
       }, [timerEnabled, isTimerRunning, timeLeftSeconds, activeView]);
 
+      // Sinkronisasi tombol Back browser / HP / iPad agar tidak langsung keluar app
+      useEffect(() => {
+        if (!window.history.state || !window.history.state.juarakelas) {
+          window.history.replaceState({ juarakelas: true, view: 'library' }, '');
+        }
+
+        const handlePopState = () => {
+          isHandlingPopStateRef.current = true;
+
+          // 1. Tutup modal yang sedang terbuka terlebih dahulu jika ada
+          if (showSubmitConfirm) {
+            setShowSubmitConfirm(false);
+          } else if (packageChoiceModal) {
+            setPackageChoiceModal(null);
+          } else if (packageToDelete) {
+            setPackageToDelete(null);
+          } else if (showUploadModal && !isGenerating) {
+            setShowUploadModal(false);
+          } else if (showAdminPanelModal) {
+            setShowAdminPanelModal(false);
+          } else if (showAdminLoginModal) {
+            setShowAdminLoginModal(false);
+          } else if (activeView !== 'library') {
+            // 2. Jika berada di halaman Kuis atau Hasil Nilai, kembali ke Beranda Daftar Paket
+            setIsTimerRunning(false);
+            setActiveView('library');
+          }
+
+          setTimeout(() => {
+            isHandlingPopStateRef.current = false;
+          }, 50);
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+      }, [
+        activeView,
+        showSubmitConfirm,
+        packageChoiceModal,
+        packageToDelete,
+        showUploadModal,
+        isGenerating,
+        showAdminPanelModal,
+        showAdminLoginModal
+      ]);
+
+      const navigateToView = (targetView) => {
+        if (targetView !== 'library' && activeView === 'library' && !isHandlingPopStateRef.current) {
+          window.history.pushState({ juarakelas: true, view: targetView }, '');
+        }
+        setActiveView(targetView);
+      };
+
+      const openModalWithHistory = (setter, value) => {
+        if (!isHandlingPopStateRef.current) {
+          window.history.pushState({ juarakelas: true, modal: true }, '');
+        }
+        setter(value);
+      };
+
       const triggerToast = (msg, type = 'info') => {
         setToastMessage({ msg, type });
         setTimeout(() => setToastMessage(null), 3800);
@@ -579,12 +640,12 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const handleAdminButtonClick = () => {
         if (isAdminUnlocked) {
           setTempApiKey(geminiApiKey);
-          setShowAdminPanelModal(true);
+          openModalWithHistory(setShowAdminPanelModal, true);
         } else {
           setLoginPinInput('');
           setLoginError('');
           setShowForgotPinView(false);
-          setShowAdminLoginModal(true);
+          openModalWithHistory(setShowAdminLoginModal, true);
         }
       };
 
@@ -594,7 +655,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           setIsAdminUnlocked(true);
           setShowAdminLoginModal(false);
           setTempApiKey(geminiApiKey);
-          setShowAdminPanelModal(true);
+          openModalWithHistory(setShowAdminPanelModal, true);
           triggerToast('Mode Admin berhasil dibuka!', 'success');
         } else {
           setLoginError('Password admin salah! Silakan coba lagi atau klik Lupa password.');
@@ -666,7 +727,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         setQuizStartTime(Date.now());
         setTimeLeftSeconds(15 * 60);
         setIsTimerRunning(timerEnabled);
-        setActiveView('quiz');
+        navigateToView('quiz');
       };
 
       const handleClickStartButton = (pkg) => {
@@ -676,7 +737,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         );
 
         if (hasVariationSet || (isAdminUnlocked && isCompletedOnce)) {
-          setPackageChoiceModal(pkg);
+          openModalWithHistory(setPackageChoiceModal, pkg);
         } else {
           handleStartPackage(pkg);
         }
@@ -706,7 +767,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         setUploadedPdfPages(0);
         setKisiKisiText('');
         setGeneratorError('');
-        setShowUploadModal(true);
+        openModalWithHistory(setShowUploadModal, true);
       };
 
       const handlePdfFileSelected = async (file) => {
@@ -1187,7 +1248,7 @@ ${referenceOutline}`;
         });
 
         setIsGrading(false);
-        setActiveView('results');
+        navigateToView('results');
       };
 
       const filteredPackages = packages.filter(
