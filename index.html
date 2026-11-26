@@ -75,7 +75,8 @@
           });
         return { ok: true };
       } catch (err) {
-        return { ok: false, reason: err?.message || 'Gagal menulis ke Firestore.' };
+        const errCode = err?.code ? `[${err.code}] ` : '';
+        return { ok: false, reason: `${errCode}${err?.message || 'Gagal menulis ke Firestore.'}` };
       }
     }
 
@@ -85,7 +86,8 @@
         await firestoreDb.collection(CLOUD_COLLECTION).doc(pkgId).delete();
         return { ok: true };
       } catch (err) {
-        return { ok: false, reason: err?.message || 'Gagal menghapus dari Firestore.' };
+        const errCode = err?.code ? `[${err.code}] ` : '';
+        return { ok: false, reason: `${errCode}${err?.message || 'Gagal menghapus dari Firestore.'}` };
       }
     }
 
@@ -594,25 +596,22 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
           setUploadedPdfName(file.name);
           setUploadedPdfPages(numPages);
-          const savedOk = await savePackageToCloud(newPackageObj);
-          setSelectedGrade(Number(genGrade));
-          setSelectedSemester(Number(genSemester));
-          setShowUploadModal(false);
-          setActiveView('library');
+          setKisiKisiText(text);
 
-          if (savedOk) {
-            triggerToast(
-              `Hore! Paket soal tersimpan di Cloud & Kelas ${genGrade} • Semester ${genSemester}!`,
-              'success'
-            );
-          } else {
-            triggerToast(
-              `Paket tersimpan di PC, tapi Cloud belum aktif. Cek Firestore Database di Firebase Console ya!`,
-              'warning'
-            );
+          const cleanName = file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ');
+          if (!genTitle) setGenTitle(cleanName);
+          if (!genSubject) {
+            const lower = cleanName.toLowerCase();
+            if (lower.includes('english') || lower.includes('inggris')) setGenSubject('Bahasa Inggris');
+            else if (lower.includes('arabic') || lower.includes('arab')) setGenSubject('Bahasa Arab');
+            else if (lower.includes('matematika') || lower.includes('mtk')) setGenSubject('Matematika');
+            else if (lower.includes('ipas') || lower.includes('ipa')) setGenSubject('IPAS');
+            else if (lower.includes('indonesia')) setGenSubject('Bahasa Indonesia');
           }
+
+          triggerToast(`Berhasil membaca ${numPages} halaman dari ${file.name}!`, 'success');
         } catch (err) {
-          setGeneratorError(`Gagal membaca file PDF: ${err.message}`);
+          setGeneratorError(`Gagal membaca file PDF: ${err?.message || 'Error tidak diketahui'}`);
         } finally {
           setIsExtractingPdf(false);
         }
