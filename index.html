@@ -440,9 +440,6 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const goToQuestionIndex = (nextIdx) => {
         const clamped = Math.min(activePackage.questions.length - 1, Math.max(0, nextIdx));
         setCurrentIdx(clamped);
-        if (!isHandlingPopStateRef.current) {
-          window.history.pushState({ juarakelas: true, view: 'quiz', idx: clamped }, '');
-        }
       };
 
       const [xpStars, setXpStars] = useState(() => {
@@ -640,7 +637,6 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         return () => window.removeEventListener('popstate', handlePopState);
       }, [
         activeView,
-        currentIdx,
         showSubmitConfirm,
         packageChoiceModal,
         packageToDelete,
