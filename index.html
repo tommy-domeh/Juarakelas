@@ -657,7 +657,12 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       };
 
       const handleClickStartButton = (pkg) => {
-        if (pkg.variationQuestions && pkg.variationQuestions.length > 0) {
+        const isCompletedOnce = pkg.bestScore !== null && pkg.bestScore !== undefined;
+        const hasVariationSet = Boolean(
+          pkg.variationQuestions && pkg.variationQuestions.length > 0
+        );
+
+        if (hasVariationSet || (isAdminUnlocked && isCompletedOnce)) {
           setPackageChoiceModal(pkg);
         } else {
           handleStartPackage(pkg);
@@ -1474,18 +1479,6 @@ ${referenceOutline}`;
                               ▶️ Mulai Latihan
                             </button>
 
-                            {isAdminUnlocked && isCompletedOnce && (
-                              <button
-                                type="button"
-                                disabled={isRemixingPackageId === pkg.id}
-                                onClick={() => handleGenerateVariationFromPackage(pkg)}
-                                className="py-3 px-3.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 border-2 border-indigo-200 text-indigo-800 font-extrabold text-xs sm:text-sm transition-all disabled:opacity-60 shrink-0"
-                                title="Buat soal variasi baru (Khusus Admin setelah soal utama selesai)"
-                              >
-                                {isRemixingPackageId === pkg.id ? '⏳ Meracik...' : '✨ Soal Baru'}
-                              </button>
-                            )}
-
                             {isAdminUnlocked && !pkg.isBuiltin && (
                               <button
                                 type="button"
@@ -1935,7 +1928,7 @@ ${referenceOutline}`;
                         Pilih Versi Latihan Soal
                       </h3>
                       <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                        Paket <strong>"{packageChoiceModal.title}"</strong> punya 2 versi soal. Mau kerjakan yang mana?
+                        Paket <strong>"{packageChoiceModal.title}"</strong> — silakan pilih versi soal yang ingin dikerjakan:
                       </p>
                     </div>
                     <button
@@ -1966,23 +1959,51 @@ ${referenceOutline}`;
                       </span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => handleStartSelectedVersion(packageChoiceModal, 'new')}
-                      className="w-full p-4 rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 hover:border-indigo-500 text-left transition-all flex items-center justify-between gap-3 group"
-                    >
-                      <div>
-                        <div className="font-extrabold text-sm sm:text-base text-indigo-900">
-                          ✨ Soal Baru (Variasi AI)
-                        </div>
-                        <div className="text-xs text-indigo-700/80 mt-0.5">
-                          {packageChoiceModal.variationQuestions.length} soal variasi baru sesuai kisi-kisi
-                        </div>
-                      </div>
-                      <span className="text-lg font-extrabold text-indigo-500 group-hover:translate-x-0.5 transition-transform">
-                        →
-                      </span>
-                    </button>
+                    {packageChoiceModal.variationQuestions &&
+                      packageChoiceModal.variationQuestions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleStartSelectedVersion(packageChoiceModal, 'new')}
+                          className="w-full p-4 rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 hover:border-indigo-500 text-left transition-all flex items-center justify-between gap-3 group"
+                        >
+                          <div>
+                            <div className="font-extrabold text-sm sm:text-base text-indigo-900">
+                              ✨ Soal Baru (Variasi AI)
+                            </div>
+                            <div className="text-xs text-indigo-700/80 mt-0.5">
+                              {packageChoiceModal.variationQuestions.length} soal variasi baru sesuai kisi-kisi
+                            </div>
+                          </div>
+                          <span className="text-lg font-extrabold text-indigo-500 group-hover:translate-x-0.5 transition-transform">
+                            →
+                          </span>
+                        </button>
+                      )}
+
+                    {isAdminUnlocked &&
+                      packageChoiceModal.bestScore !== null &&
+                      packageChoiceModal.bestScore !== undefined && (
+                        <button
+                          type="button"
+                          disabled={isRemixingPackageId === packageChoiceModal.id}
+                          onClick={() => handleGenerateVariationFromPackage(packageChoiceModal)}
+                          className="w-full p-4 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/70 hover:bg-purple-100/80 hover:border-purple-500 text-left transition-all flex items-center justify-between gap-3 disabled:opacity-60"
+                        >
+                          <div>
+                            <div className="font-extrabold text-sm text-purple-900">
+                              {isRemixingPackageId === packageChoiceModal.id
+                                ? '⏳ Sedang Meracik Soal Baru...'
+                                : packageChoiceModal.variationQuestions?.length > 0
+                                ? '🪄 Buat Ulang Soal Baru (Regenerate AI)'
+                                : '🪄 Buat Soal Baru (Generate Variasi AI)'}
+                            </div>
+                            <div className="text-xs text-purple-700/80 mt-0.5">
+                              Khusus Admin • Meracik variasi soal segar dari kisi-kisi ini
+                            </div>
+                          </div>
+                          <span className="text-base font-extrabold text-purple-600">+</span>
+                        </button>
+                      )}
                   </div>
 
                   <button
