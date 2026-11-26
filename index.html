@@ -49,6 +49,9 @@
       appId: '1:869988330041:web:76e39d7ed55637dcbdbbe8'
     };
 
+    const DEFAULT_ADMIN_PIN = '123456';
+    const ADMIN_RECOVERY_CODE = 'TOMMY2026';
+
     let firestoreDb = null;
     const CLOUD_COLLECTION = 'juarakelas_packages';
 
@@ -231,7 +234,18 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [geminiApiKey, setGeminiApiKey] = useState(() => {
         return localStorage.getItem('juarakelas_gemini_key') || '';
       });
-      const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+      const [adminPin, setAdminPin] = useState(() => {
+        return localStorage.getItem('juarakelas_admin_pin') || DEFAULT_ADMIN_PIN;
+      });
+      const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+      const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+      const [showAdminPanelModal, setShowAdminPanelModal] = useState(false);
+      const [showForgotPinView, setShowForgotPinView] = useState(false);
+      const [loginPinInput, setLoginPinInput] = useState('');
+      const [loginError, setLoginError] = useState('');
+      const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
+      const [newPinInput, setNewPinInput] = useState('');
+      const [recoveryError, setRecoveryError] = useState('');
       const [tempApiKey, setTempApiKey] = useState('');
 
       const [packages, setPackages] = useState(() => {
@@ -366,8 +380,62 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         const trimmed = tempApiKey.trim();
         setGeminiApiKey(trimmed);
         localStorage.setItem('juarakelas_gemini_key', trimmed);
-        setShowApiKeyModal(false);
         triggerToast('Gemini API Key berhasil disimpan di perangkat ini!', 'success');
+      };
+
+      const openAdminAccess = () => {
+        if (isAdminUnlocked) {
+          setTempApiKey(geminiApiKey);
+          setShowAdminPanelModal(true);
+          return;
+        }
+        setLoginPinInput('');
+        setLoginError('');
+        setRecoveryCodeInput('');
+        setNewPinInput('');
+        setRecoveryError('');
+        setShowForgotPinView(false);
+        setShowAdminLoginModal(true);
+      };
+
+      const handleAdminLoginSubmit = (e) => {
+        e.preventDefault();
+        if (loginPinInput.trim() === adminPin) {
+          setIsAdminUnlocked(true);
+          setShowAdminLoginModal(false);
+          setTempApiKey(geminiApiKey);
+          setShowAdminPanelModal(true);
+          triggerToast('Mode Admin terbuka!', 'success');
+        } else {
+          setLoginError('Password Admin salah! Coba lagi atau klik "Lupa password?".');
+        }
+      };
+
+      const handleResetPasswordSubmit = (e) => {
+        e.preventDefault();
+        if (recoveryCodeInput.trim().toUpperCase() !== ADMIN_RECOVERY_CODE) {
+          setRecoveryError(`Kode pemulihan salah! Gunakan kode: ${ADMIN_RECOVERY_CODE}`);
+          return;
+        }
+        const cleanedNewPin = newPinInput.trim();
+        if (cleanedNewPin.length < 4) {
+          setRecoveryError('Password baru minimal 4 karakter ya.');
+          return;
+        }
+        setAdminPin(cleanedNewPin);
+        localStorage.setItem('juarakelas_admin_pin', cleanedNewPin);
+        setIsAdminUnlocked(true);
+        setShowAdminLoginModal(false);
+        setShowForgotPinView(false);
+        setTempApiKey(geminiApiKey);
+        setShowAdminPanelModal(true);
+        triggerToast('Password Admin berhasil diperbarui & masuk ke Menu Admin!', 'success');
+      };
+
+      const handleLockAdmin = () => {
+        setIsAdminUnlocked(false);
+        setShowAdminPanelModal(false);
+        triggerToast('Menu Admin dikunci kembali.', 'info');
       };
 
       // Timer Countdown
@@ -458,10 +526,16 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       };
 
       const openUploadModalForCurrentFilter = () => {
+        if (!isAdminUnlocked) {
+          openAdminAccess();
+          triggerToast('Silakan masuk ke Menu Admin dulu untuk upload kisi-kisi.', 'warning');
+          return;
+        }
         if (!geminiApiKey) {
-          setTempApiKey('');
-          setShowApiKeyModal(true);
-          triggerToast('Masukkan Gemini API Key dulu ya sebelum membuat soal!', 'warning');
+          setShowUploadModal(false);
+          setTempApiKey(geminiApiKey);
+          setShowAdminPanelModal(true);
+          triggerToast('Pasang Gemini API Key di Menu Admin dulu ya sebelum membuat soal!', 'warning');
           return;
         }
         setGenGrade(selectedGrade);
@@ -868,7 +942,8 @@ Aturan penilaian fleksibel:
       };
 
       return (
-        <div className="pb-14">
+        <div className="min-h-screen flex flex-col justify-between">
+          <div className="pb-14">
           {/* HEADER */}
           <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b-2 border-sky-100 shadow-sm">
             <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -931,32 +1006,11 @@ Aturan penilaian fleksibel:
                   <>
                     <button
                       type="button"
-                      onClick={handleManualSyncToCloud}
-                      className="px-3 py-2 rounded-xl text-xs font-extrabold border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 transition-all"
-                      title="Kirim paket soal dari perangkat ini ke cloud agar muncul di iPad"
+                      onClick={openAdminAccess}
+                      className="px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 border-slate-200 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-800 transition-all"
+                      title="Buka menu khusus admin"
                     >
-                      ☁️ Sync iPad
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setTempApiKey(geminiApiKey);
-                        setShowApiKeyModal(true);
-                      }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 transition-all ${
-                        geminiApiKey
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                          : 'bg-amber-50 border-amber-300 text-amber-800 animate-pulse'
-                      }`}
-                    >
-                      {geminiApiKey ? '🔑 Gemini Aktif' : '🔑 Pasang API Key'}
-                    </button>
-
-                    <button
-                      onClick={openUploadModalForCurrentFilter}
-                      className="px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md shadow-indigo-200"
-                    >
-                      + Upload PDF Kisi-Kisi
+                      {isAdminUnlocked ? '🔓 Menu Admin' : '🔒 Admin'}
                     </button>
                   </>
                 )}
@@ -993,17 +1047,19 @@ Aturan penilaian fleksibel:
                     Pilih Kelas & Semester untuk Mulai Latihan!
                   </h2>
                   <p className="text-sm text-slate-600 max-w-2xl">
-                    Unggah file <strong>PDF Kisi-Kisi</strong> sesuai Kelas dan Semester, lalu Gemini AI
-                    akan otomatis membuat soal Pilihan Ganda & Esai lengkap dengan pembahasan.
+                    Pilih jenjang Kelas dan Semester di bawah ini untuk mengerjakan paket latihan soal
+                    yang sudah tersedia.
                   </p>
                 </div>
 
-                <button
-                  onClick={openUploadModalForCurrentFilter}
-                  className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-200"
-                >
-                  📄 + Upload PDF Kisi-Kisi Baru
-                </button>
+                {isAdminUnlocked && (
+                  <button
+                    onClick={openUploadModalForCurrentFilter}
+                    className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-200"
+                  >
+                    📄 + Upload PDF Kisi-Kisi Baru
+                  </button>
+                )}
               </div>
 
               {/* FILTER KELAS & SEMESTER */}
@@ -1154,16 +1210,19 @@ Aturan penilaian fleksibel:
                     Belum Ada Paket Soal untuk Kelas {selectedGrade} • Semester {selectedSemester}
                   </h3>
                   <p className="text-sm text-slate-500 max-w-md mx-auto">
-                    Yuk unggah file PDF kisi-kisi pelajaran untuk Kelas {selectedGrade} Semester{' '}
-                    {selectedSemester}, dan biarkan Gemini AI membuatkan soal latihannya!
+                    {isAdminUnlocked
+                      ? `Yuk unggah file PDF kisi-kisi pelajaran untuk Kelas ${selectedGrade} Semester ${selectedSemester}, dan biarkan Gemini AI membuatkan soal latihannya!`
+                      : `Belum ada soal latihan untuk Kelas ${selectedGrade} Semester ${selectedSemester} saat ini. Silakan pilih kelas atau semester lain ya.`}
                   </p>
-                  <button
-                    type="button"
-                    onClick={openUploadModalForCurrentFilter}
-                    className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-sm shadow-md shadow-indigo-200"
-                  >
-                    📄 Upload Kisi-Kisi PDF Sekarang
-                  </button>
+                  {isAdminUnlocked && (
+                    <button
+                      type="button"
+                      onClick={openUploadModalForCurrentFilter}
+                      className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-sm shadow-md shadow-indigo-200"
+                    >
+                      📄 Upload Kisi-Kisi PDF Sekarang
+                    </button>
+                  )}
                 </div>
               )}
             </main>
@@ -1338,217 +1397,235 @@ Aturan penilaian fleksibel:
                         onClick={() => setShowSubmitConfirm(true)}
                         className="px-5 py-2.5 rounded-xl font-extrabold text-sm bg-emerald-600 text-white hover:bg-emerald-700"
                       >
-                        ✅ Kumpulkan & Cek Nilai
+                        Kumpulkan & Cek Nilai
                       </button>
                     )}
                   </div>
                 </div>
-
-                {/* NAVIGASI NOMOR */}
-                <aside className="lg:col-span-4 bg-white rounded-3xl border-2 border-sky-100 shadow-md p-5 sm:p-6 sticky top-24">
-                  <h2 className="font-extrabold text-base text-slate-800 mb-4">
-                    🔢 Navigasi Nomor Soal ({activePackage.questions.length} Soal)
-                  </h2>
-                  <div className="grid grid-cols-5 gap-2.5 mb-5">
-                    {activePackage.questions.map((q, idx) => {
-                      const isCurrent = idx === currentIdx;
-                      const isAnswered = Boolean(answers[q.id] && answers[q.id].trim().length > 0);
-                      const isUnsure = Boolean(unsureFlags[q.id]);
-                      let btnStyle = 'bg-slate-50 border-slate-200 text-slate-600';
-                      if (isUnsure) btnStyle = 'bg-amber-400 border-amber-500 text-slate-900';
-                      else if (isAnswered) btnStyle = 'bg-indigo-600 border-indigo-600 text-white';
-
-                      return (
-                        <button
-                          key={q.id}
-                          type="button"
-                          onClick={() => setCurrentIdx(idx)}
-                          className={`h-11 rounded-xl font-extrabold text-sm border-2 ${btnStyle} ${
-                            isCurrent ? 'ring-4 ring-sky-300' : ''
-                          }`}
-                        >
-                          {idx + 1}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowSubmitConfirm(true)}
-                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-sm shadow-md"
-                  >
-                    ✅ Kumpulkan & Cek Nilai
-                  </button>
-                </aside>
               </div>
             </main>
           )}
 
-          {/* VIEW 3: HASIL & PEMBAHASAN */}
-          {activeView === 'results' && gradingResults && (
-            <main className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
-              <div className="bg-white rounded-3xl border-2 border-amber-200 shadow-lg p-6 sm:p-8 text-center">
-                <div className="text-5xl mb-3">🏆</div>
-                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-                  {getEncouragementMessage(gradingResults.finalScore)}
-                </h2>
-                <p className="text-xs sm:text-sm font-bold text-slate-500 mt-1">
-                  {activePackage.title} • Waktu pengerjaan: {elapsedDurationText}
-                </p>
-
-                <div className="text-3xl my-3">
-                  {'⭐'.repeat(getStarCount(gradingResults.finalScore))}
-                </div>
-
-                <div className="my-5 inline-flex flex-wrap items-center justify-center gap-6 bg-sky-50 border-2 border-sky-100 px-8 py-4 rounded-3xl">
-                  <div>
-                    <span className="text-xs font-extrabold uppercase text-slate-500 block">
-                      Nilai Akhir
-                    </span>
-                    <span className="text-4xl font-black text-indigo-600">
-                      {gradingResults.finalScore}
-                    </span>
-                    <span className="text-sm font-bold text-slate-400"> / 100</span>
-                  </div>
-                  <div>
-                    <span className="text-xs font-extrabold uppercase text-slate-500 block">
-                      Jawaban Tepat
-                    </span>
-                    <span className="text-2xl font-black text-emerald-600">
-                      {gradingResults.correctCount} / {gradingResults.totalQuestions}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleStartPackage(activePackage)}
-                    className="px-6 py-3 rounded-2xl bg-sky-600 text-white font-extrabold text-sm"
-                  >
-                    🔄 Ulangi Paket Ini
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveView('library')}
-                    className="px-6 py-3 rounded-2xl bg-indigo-50 text-indigo-700 border-2 border-indigo-200 font-extrabold text-sm"
-                  >
-                    📂 Kembali ke Daftar Kelas & Semester
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-5">
-                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 px-1">
-                  🏅 Pembahasan Lengkap & Tips Awas Jebakan
-                </h3>
-
-                {gradingResults.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`bg-white rounded-3xl border-2 p-5 sm:p-7 shadow-sm ${
-                      item.isCorrect ? 'border-emerald-200' : 'border-rose-200'
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                      <span className="px-3 py-1 rounded-xl bg-slate-800 text-white font-extrabold text-xs">
-                        Soal No. {item.number} • {item.unit}
-                      </span>
-                      <span
-                        className={`px-3.5 py-1 rounded-full font-extrabold text-xs ${
-                          item.isCorrect
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-rose-100 text-rose-800'
-                        }`}
+          {/* MODAL LOGIN ADMIN & LUPA PASSWORD */}
+          {showAdminLoginModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 border-2 border-indigo-100 shadow-2xl">
+                {!showForgotPinView ? (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-extrabold text-slate-900">
+                        🔒 Masuk Menu Admin
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminLoginModal(false)}
+                        className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
                       >
-                        {item.isCorrect ? `✅ Benar (+${item.score})` : `❌ Perlu Diperbaiki (${item.score})`}
-                      </span>
+                        ✕
+                      </button>
                     </div>
-
-                    <p className="text-base sm:text-lg font-bold text-slate-800 mb-4 whitespace-pre-line">
-                      {item.question}
+                    <p className="text-xs text-slate-500 mb-4">
+                      Masukkan password admin untuk mengakses pengaturan API Key, Sync iPad, dan Upload Kisi-Kisi. (Password awal: <span className="font-bold text-slate-700">123456</span>)
                     </p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                        <span className="text-xs font-extrabold uppercase text-slate-500 block mb-1">
-                          Jawaban Kamu:
-                        </span>
-                        <p className="font-bold text-sm text-slate-800">{item.userAnswerDisplay}</p>
-                      </div>
-                      <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200">
-                        <span className="text-xs font-extrabold uppercase text-sky-700 block mb-1">
-                          Kunci Jawaban:
-                        </span>
-                        <p className="font-bold text-sm text-sky-950">{item.correctAnswerDisplay}</p>
-                      </div>
-                    </div>
-
-                    {item.aiFeedback && (
-                      <div className="mb-4 p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-purple-900 text-sm font-semibold">
-                        ✨ <strong>Catatan Guru AI:</strong> {item.aiFeedback}
+                    {loginError && (
+                      <div className="mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                        ⚠️ {loginError}
                       </div>
                     )}
-
-                    <div className="mb-3.5 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200">
-                      <div className="text-emerald-800 font-extrabold text-sm mb-1">
-                        💡 Pembahasan Langkah demi Langkah
+                    <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
+                      <input
+                        type="password"
+                        value={loginPinInput}
+                        onChange={(e) => setLoginPinInput(e.target.value)}
+                        placeholder="Masukkan password admin..."
+                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
+                        required
+                      />
+                      <div className="flex items-center justify-between text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowForgotPinView(true);
+                            setRecoveryError('');
+                          }}
+                          className="font-extrabold text-indigo-600 hover:underline"
+                        >
+                          Lupa password?
+                        </button>
                       </div>
-                      <p className="text-sm text-emerald-950 leading-relaxed whitespace-pre-line font-medium">
-                        {item.explanation}
-                      </p>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300">
-                      <div className="text-amber-900 font-extrabold text-sm mb-1">
-                        ⚠️ Awas Jebakan!
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminLoginModal(false)}
+                          className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-600"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm"
+                        >
+                          Masuk
+                        </button>
                       </div>
-                      <p className="text-sm text-amber-950 leading-relaxed font-medium">
-                        {item.trapWarning}
-                      </p>
+                    </form>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-extrabold text-slate-900">
+                        🔄 Reset Password Admin
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminLoginModal(false)}
+                        className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  </div>
-                ))}
+                    <p className="text-xs text-slate-500 mb-4">
+                      Masukkan kode pemulihan <span className="font-extrabold text-indigo-700">{ADMIN_RECOVERY_CODE}</span> lalu tentukan password admin baru kamu.
+                    </p>
+                    {recoveryError && (
+                      <div className="mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                        ⚠️ {recoveryError}
+                      </div>
+                    )}
+                    <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">
+                          Kode Pemulihan
+                        </label>
+                        <input
+                          type="text"
+                          value={recoveryCodeInput}
+                          onChange={(e) => setRecoveryCodeInput(e.target.value)}
+                          placeholder="Ketik TOMMY2026"
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">
+                          Password Baru
+                        </label>
+                        <input
+                          type="password"
+                          value={newPinInput}
+                          onChange={(e) => setNewPinInput(e.target.value)}
+                          placeholder="Minimal 4 karakter..."
+                          className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
+                          required
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotPinView(false)}
+                          className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-600"
+                        >
+                          Kembali
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm"
+                        >
+                          Simpan Password Baru
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                )}
               </div>
-            </main>
+            </div>
           )}
 
-          {/* MODAL API KEY */}
-          {showApiKeyModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl max-w-md w-full p-6 border-2 border-sky-100 shadow-2xl">
-                <h3 className="text-lg font-extrabold text-slate-900 mb-1">
-                  🔑 Pengaturan Gemini API Key
-                </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  Tempel kode API Key dari Google AI Studio agar fitur Upload PDF & Koreksi Esai otomatis berjalan. Kunci ini disimpan aman di browser perangkat ini saja.
-                </p>
-                <form onSubmit={handleSaveApiKey} className="space-y-4">
+          {/* MODAL PANEL ADMIN (API KEY, SYNC IPAD, UPLOAD PDF) */}
+          {showAdminPanelModal && isAdminUnlocked && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-3xl max-w-lg w-full p-6 border-2 border-indigo-100 shadow-2xl space-y-5 my-auto">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-slate-900">
+                      🛠️ Menu Admin Juara Kelas
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Kelola API Key, sinkronisasi iPad, dan soal PDF.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPanelModal(false)}
+                    className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Bagian 1: Pengaturan Gemini API Key */}
+                <form onSubmit={handleSaveApiKey} className="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-extrabold uppercase text-slate-700">
+                      🔑 Gemini API Key
+                    </label>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${geminiApiKey ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+                      {geminiApiKey ? 'Aktif' : 'Belum Dipasang'}
+                    </span>
+                  </div>
                   <input
                     type="password"
                     value={tempApiKey}
                     onChange={(e) => setTempApiKey(e.target.value)}
                     placeholder="Tempel kode AIzaSy... di sini"
-                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
+                    className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm bg-white"
                     required
                   />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowApiKeyModal(false)}
-                      className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-600"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-extrabold text-sm"
-                    >
-                      Simpan Kunci
-                    </button>
-                  </div>
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm"
+                  >
+                    Simpan API Key
+                  </button>
                 </form>
+
+                {/* Bagian 2: Sync iPad & Upload Kisi-Kisi PDF */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={handleManualSyncToCloud}
+                    className="py-3 px-4 rounded-2xl border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-900 font-extrabold text-xs sm:text-sm"
+                  >
+                    ☁️ Sync iPad
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAdminPanelModal(false);
+                      openUploadModalForCurrentFilter();
+                    }}
+                    className="py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs sm:text-sm shadow-md"
+                  >
+                    📄 + Upload PDF Kisi-Kisi
+                  </button>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleLockAdmin}
+                    className="px-4 py-2 rounded-xl border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs"
+                  >
+                    🔒 Kunci Menu Admin
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPanelModal(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                  >
+                    Tutup
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1860,6 +1937,11 @@ Aturan penilaian fleksibel:
               </div>
             </div>
           )}
+          </div>
+
+          <footer className="py-5 px-4 text-center text-xs font-bold text-slate-500 border-t border-sky-100 bg-white/70">
+            Copyright Tommydomeh 2026
+          </footer>
         </div>
       );
     }
