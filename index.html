@@ -604,17 +604,12 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
             // 2. Dari halaman Hasil Nilai -> mundur ke halaman Kuis sebelumnya
             setActiveView('quiz');
           } else if (activeView === 'quiz') {
-            // 3. Di dalam Kuis -> mundur ke soal sebelumnya dulu, lalu ke Pilih Versi Soal (jika ada) atau Daftar Paket
-            if (currentIdx > 0) {
-              setCurrentIdx((prev) => Math.max(0, prev - 1));
-            } else {
-              setIsTimerRunning(false);
-              setActiveView('library');
-              if (lastChoicePackageRef.current) {
-                // Dorong state modal ke history agar tombol Back berikutnya di iPad menutup modal dengan rapi
-                window.history.pushState({ juarakelas: true, modal: true }, '');
-                setPackageChoiceModal(lastChoicePackageRef.current);
-              }
+            // 3. Dari halaman Soal -> langsung keluar ke Pilih Versi Soal (jika ada) atau Daftar Paket
+            setIsTimerRunning(false);
+            setActiveView('library');
+            if (lastChoicePackageRef.current) {
+              window.history.pushState({ juarakelas: true, modal: true }, '');
+              setPackageChoiceModal(lastChoicePackageRef.current);
             }
           }
 
