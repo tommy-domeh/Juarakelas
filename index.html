@@ -563,6 +563,19 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
       };
 
+      const handleToggleTimerMode = () => {
+        const nextState = !timerEnabled;
+        setTimerEnabled(nextState);
+        if (nextState) {
+          setTimeLeftSeconds(15 * 60);
+          setIsTimerRunning(true);
+          triggerToast('Mode Pakai Waktu 15 Menit aktif! Ayo fokus ya!', 'info');
+        } else {
+          setIsTimerRunning(false);
+          triggerToast('Mode Santai aktif! Belajar tenang tanpa batas waktu.', 'success');
+        }
+      };
+
       const handleAdminButtonClick = () => {
         if (isAdminUnlocked) {
           setTempApiKey(geminiApiKey);
