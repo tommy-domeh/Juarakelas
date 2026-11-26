@@ -1686,10 +1686,10 @@ ${referenceOutline}`;
 
             {/* VIEW 2: STUDENT QUIZ MODE */}
             {activeView === 'quiz' && currentQuestion && (
-              <main className="max-w-6xl mx-auto px-4 pt-6">
-                <div className="bg-white/[0.08] backdrop-blur-xl rounded-2xl p-4 mb-6 border border-white/15 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="px-3 py-1 rounded-xl bg-[#f26d5b] text-white font-extrabold text-xs sm:text-sm">
+              <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-6">
+                <div className="bg-white/[0.08] backdrop-blur-xl rounded-2xl px-3.5 py-2.5 sm:p-4 mb-3 sm:mb-6 border border-white/15 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
+                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-2.5">
+                    <span className="px-2.5 py-1 rounded-xl bg-[#f26d5b] text-white font-extrabold text-xs sm:text-sm">
                       Soal {currentIdx + 1} dari {activePackage.questions.length}
                     </span>
                     <span className="text-xs sm:text-sm font-semibold text-indigo-100">
@@ -1697,7 +1697,7 @@ ${referenceOutline}`;
                       {activePackage.questions.length}
                     </span>
                   </div>
-                  <div className="w-full sm:w-64 h-3 bg-white/15 rounded-full overflow-hidden border border-white/10">
+                  <div className="w-full sm:w-64 h-2 sm:h-3 bg-white/15 rounded-full overflow-hidden border border-white/10">
                     <div
                       className="h-full bg-gradient-to-r from-[#f26d5b] to-amber-400 transition-all duration-300 rounded-full"
                       style={{
@@ -1709,38 +1709,38 @@ ${referenceOutline}`;
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                  <div className="lg:col-span-8 bg-[#fffdf7] text-slate-800 rounded-3xl border-2 border-amber-200/90 shadow-2xl p-5 sm:p-8">
-                    <div className="flex flex-wrap items-center gap-2 mb-5">
-                      <span className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white font-extrabold text-sm">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
+                  <div className="lg:col-span-8 bg-[#fffdf7] text-slate-800 rounded-2xl sm:rounded-3xl border-2 border-amber-200/90 shadow-2xl p-4 sm:p-8">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3 sm:mb-5">
+                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900 text-white font-extrabold text-xs sm:text-sm">
                         No. {currentIdx + 1}
                       </span>
-                      <span className="px-3.5 py-1.5 rounded-xl bg-sky-100 text-sky-900 font-bold text-xs sm:text-sm">
+                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-sky-100 text-sky-900 font-bold text-xs sm:text-sm">
                         {currentQuestion.type === 'pg' ? 'Pilihan Ganda' : 'Esai / Isian'}
                       </span>
-                      <span className="px-3.5 py-1.5 rounded-xl bg-amber-100 text-amber-900 font-bold text-xs sm:text-sm">
+                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-amber-100 text-amber-900 font-bold text-xs sm:text-sm">
                         📚 {currentQuestion.unit}
                       </span>
                       {unsureFlags[currentQuestion.id] && (
-                        <span className="px-3 py-1 rounded-xl bg-amber-400 text-slate-900 font-extrabold text-xs">
-                          ❓ Ditandai Ragu-ragu
+                        <span className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-900 font-extrabold text-xs">
+                          ❓ Ragu-ragu
                         </span>
                       )}
                     </div>
 
                     {(currentQuestion.visualEmoji || currentQuestion.visualCaption) && (
-                      <div className="mb-6 rounded-2xl bg-amber-50/90 border-2 border-dashed border-amber-300/80 p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
+                      <div className="mb-3.5 sm:mb-6 rounded-2xl bg-amber-50/90 border-2 border-dashed border-amber-300/80 p-3 sm:p-5 flex flex-row items-center gap-3 sm:gap-4">
                         {currentQuestion.visualEmoji && (
-                          <div className="text-4xl sm:text-5xl bg-white px-5 py-3.5 rounded-2xl shadow-sm border border-amber-100 select-none shrink-0">
+                          <div className="text-2xl sm:text-5xl bg-white px-3 py-2 sm:px-5 sm:py-3.5 rounded-2xl shadow-sm border border-amber-100 select-none shrink-0">
                             {currentQuestion.visualEmoji}
                           </div>
                         )}
                         {currentQuestion.visualCaption && (
-                          <div className="text-center sm:text-left">
-                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-700 block mb-0.5">
+                          <div className="text-left">
+                            <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-amber-700 block mb-0.5">
                               Ilustrasi Gambar
                             </span>
-                            <p className="text-sm sm:text-base font-medium text-slate-700">
+                            <p className="text-xs sm:text-base font-medium text-slate-700 leading-snug">
                               {currentQuestion.visualCaption}
                             </p>
                           </div>
@@ -1748,14 +1748,14 @@ ${referenceOutline}`;
                       </div>
                     )}
 
-                    <div className="mb-7">
-                      <p className="text-lg sm:text-xl font-bold text-slate-800 leading-relaxed whitespace-pre-line">
+                    <div className="mb-4 sm:mb-7">
+                      <p className="text-base sm:text-xl font-bold text-slate-800 leading-snug sm:leading-relaxed whitespace-pre-line">
                         {currentQuestion.question}
                       </p>
                     </div>
 
                     {currentQuestion.type === 'pg' ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-8">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5 mb-4 sm:mb-8">
                         {currentQuestion.options.map((opt) => {
                           const isSelected = answers[currentQuestion.id] === opt.key;
                           return (
@@ -1765,14 +1765,14 @@ ${referenceOutline}`;
                               onClick={() =>
                                 setAnswers((prev) => ({ ...prev, [currentQuestion.id]: opt.key }))
                               }
-                              className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center gap-3.5 ${
+                              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 text-left transition-all flex items-center gap-3 ${
                                 isSelected
                                   ? 'bg-amber-100/80 border-[#f26d5b] shadow-md'
                                   : 'bg-white border-slate-200 hover:border-amber-400 hover:bg-amber-50/40'
                               }`}
                             >
                               <span
-                                className={`w-10 h-10 rounded-xl font-extrabold text-base flex items-center justify-center shrink-0 ${
+                                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl font-extrabold text-sm sm:text-base flex items-center justify-center shrink-0 ${
                                   isSelected
                                     ? 'bg-[#f26d5b] text-white'
                                     : 'bg-slate-100 text-slate-700'
@@ -1780,7 +1780,7 @@ ${referenceOutline}`;
                               >
                                 {opt.key}
                               </span>
-                              <span className="text-base sm:text-lg font-bold text-slate-800">
+                              <span className="text-sm sm:text-lg font-bold text-slate-800">
                                 {opt.text}
                               </span>
                             </button>
@@ -1788,12 +1788,12 @@ ${referenceOutline}`;
                         })}
                       </div>
                     ) : (
-                      <div className="mb-8">
-                        <label className="block text-sm font-bold text-slate-600 mb-2">
+                      <div className="mb-4 sm:mb-8">
+                        <label className="block text-xs sm:text-sm font-bold text-slate-600 mb-1.5 sm:mb-2">
                           ✏️ Ketik jawabanmu di kotak bawah ini ya:
                         </label>
                         <textarea
-                          rows={3}
+                          rows={2}
                           value={answers[currentQuestion.id] || ''}
                           onChange={(e) =>
                             setAnswers((prev) => ({
@@ -1802,65 +1802,72 @@ ${referenceOutline}`;
                             }))
                           }
                           placeholder="Tulis jawabanmu di sini..."
-                          className="w-full p-4 rounded-2xl border-2 border-amber-300 focus:border-[#f26d5b] outline-none text-base sm:text-lg font-bold text-slate-800 bg-white"
-                        />
+                        className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-amber-300 focus:border-[#f26d5b] outline-none text-sm sm:text-lg font-bold text-slate-800 bg-white"
+                      />
+                    </div>
+                  )}
+
+                    {/* Baris Bawah: Portrait -> Ragu di kiri bawah, Lanjutkan di kanan bawah | Landscape -> Ragu di tengah */}
+                    <div className="pt-3 sm:pt-5 border-t-2 border-amber-100 flex items-center justify-between gap-2.5">
+                      <div className="flex-1 flex items-center justify-start">
+                        <button
+                          type="button"
+                          disabled={currentIdx === 0}
+                          onClick={() => goToQuestionIndex(currentIdx - 1)}
+                          className="hidden sm:inline-flex px-4 py-2.5 rounded-xl font-bold text-sm border-2 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                        >
+                          ← Sebelumnya
+                        </button>
                       </div>
-                    )}
 
-                    <div className="pt-5 border-t-2 border-amber-100 flex flex-wrap items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        disabled={currentIdx === 0}
-                        onClick={() => goToQuestionIndex(currentIdx - 1)}
-                        className="px-4 py-2.5 rounded-xl font-bold text-sm border-2 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
-                      >
-                        ← Sebelumnya
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setUnsureFlags((prev) => ({
-                            ...prev,
-                            [currentQuestion.id]: !prev[currentQuestion.id]
-                          }))
-                        }
-                        className={`px-4 py-2.5 rounded-xl font-bold text-sm border-2 ${
-                          unsureFlags[currentQuestion.id]
-                            ? 'bg-amber-400 border-amber-500 text-slate-900'
-                            : 'bg-amber-50 border-amber-300 text-amber-800'
-                        }`}
-                      >
-                        ❓ Ragu-ragu
-                      </button>
-
-                      {currentIdx < activePackage.questions.length - 1 ? (
+                      <div className="flex-1 flex items-center justify-start sm:justify-center">
                         <button
                           type="button"
-                          onClick={() => goToQuestionIndex(currentIdx + 1)}
-                          className="px-5 py-2.5 rounded-xl font-bold text-sm bg-slate-900 text-white hover:bg-slate-800"
+                          onClick={() =>
+                            setUnsureFlags((prev) => ({
+                              ...prev,
+                              [currentQuestion.id]: !prev[currentQuestion.id]
+                            }))
+                          }
+                          className={`px-3.5 py-2.5 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 ${
+                            unsureFlags[currentQuestion.id]
+                              ? 'bg-amber-400 border-amber-500 text-slate-900'
+                              : 'bg-amber-50 border-amber-300 text-amber-800'
+                          }`}
                         >
-                          Selanjutnya →
+                          ❓ Ragu-ragu
                         </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openModalWithHistory(setShowSubmitConfirm, true)}
-                          className="px-5 py-2.5 rounded-xl font-extrabold text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-md"
-                        >
-                          ✅ Kumpulkan & Cek Nilai
-                        </button>
-                      )}
+                      </div>
+
+                      <div className="flex-1 flex items-center justify-end">
+                        {currentIdx < activePackage.questions.length - 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => goToQuestionIndex(currentIdx + 1)}
+                            className="px-4 py-2.5 sm:px-5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-slate-900 text-white hover:bg-slate-800"
+                          >
+                            Selanjutnya →
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openModalWithHistory(setShowSubmitConfirm, true)}
+                            className="px-4 py-2.5 sm:px-5 sm:py-2.5 rounded-xl font-extrabold text-xs sm:text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-md"
+                          >
+                            ✅ Kumpulkan & Cek Nilai
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   {/* PANEL NAVIGASI NOMOR SOAL */}
-                  <aside className="lg:col-span-4 bg-white/[0.09] backdrop-blur-md text-white rounded-3xl border border-white/15 shadow-xl p-5 sm:p-6 sticky top-24">
+                  <aside className="lg:col-span-4 bg-white/[0.09] backdrop-blur-md text-white rounded-2xl sm:rounded-3xl border border-white/15 shadow-xl p-4 sm:p-6 lg:sticky lg:top-24">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="font-extrabold text-base text-white">
+                      <h2 className="font-extrabold text-sm sm:text-base text-white">
                         🧭 Navigasi Nomor Soal
                       </h2>
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white/10 text-indigo-100">
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white/15 text-indigo-100">
                         {activePackage.questions.length} Soal
                       </span>
                     </div>
