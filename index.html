@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Juara Kelas - Bank Soal & Kisi-Kisi Pintar</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- PDF.js untuk membaca file PDF Kisi-Kisi -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- React & Babel Standalone agar 1 file langsung jalan di Vercel & iPad -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-sky-50 via-amber-50/40 to-indigo-50 text-slate-800 min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Konfigurasi PDF.js Worker
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    // ========================================================================
+    // PAKET SOAL BAWAAN (KELAS 2 - SEMESTER 1 - BAHASA INGGRIS)
+    // ========================================================================
+    const DEFAULT_KISI_KISI = `KISI-KISI ASESMEN SUMATIF AKHIR SEMESTER (ASAS)
+SEKOLAH AL-QUR'AN THALHAH BIN UBAIDILLAH (S.A.T.U.) ISLAMIC SCHOOL
+Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
+
+1. Unit 1 (Family Members): Disajikan ilustrasi gambar kakek, peserta didik dapat menentukan kosakata anggota keluarga yang tepat.
+2. Unit 1 (Introducing Family): Disajikan dialog anak memperkenalkan anggota keluarganya, peserta didik dapat melengkapi dialog tersebut sesuai konteks.
+3. Unit 1 (Adab to Parents - Birrul Walidain): Disajikan situasi interaksi dengan orang tua, peserta didik dapat menerapkan adab berbicara yang baik.
+4. Unit 2 (Animals & Expressing Admiration): Disajikan ilustrasi anak melihat hewan ciptaan Allah, peserta didik dapat menentukan kalimat thayyibah (MasyaAllah) yang tepat.
+5. Unit 2 (Sirah Animals): Disajikan pernyataan singkat mengenai kisah Gua Tsur, peserta didik dapat mengidentifikasi hewan yang membantu Rasulullah SAW (laba-laba / spider & merpati / dove).
+6. Unit 3 (Helping at Home & Polite Words): Disajikan aktivitas membantu di rumah dan dialog ucapan terima kasih, peserta didik dapat memilih respons santun yang sesuai.
+7. Unit 4 (Rooms in the House & Prepositions in/on): Disajikan posisi benda di ruangan, peserta didik dapat menentukan preposisi tempat yang tepat (in/on).
+8. Unit 2 (Sentence Structure a/an + adjective): Disajikan gambar seekor hewan, peserta didik melengkapi kalimat deskripsi hewan dengan artikel a/an yang tepat.
+9. Unit 3 (Sentence Building - Word Order): Disajikan kata-kata acak tentang mencuci piring, peserta didik menyusunnya menjadi kalimat yang benar.
+10. Unit 4 (Prepositions in/on): Disajikan gambar apel di dalam keranjang, peserta didik dapat menuliskan kalimat/preposisi yang tepat.`;
+
+    const DEFAULT_BUILTIN_PACKAGE = {
+      id: 'builtin_kls2_sem1_english',
+      isBuiltin: true,
+      grade: 2,
+      semester: 1,
+      subject: 'Bahasa Inggris',
+      title: 'ASAS Bahasa Inggris - Unit 1 s/d 4 (S.A.T.U. Islamic School)',
+      sourcePdfName: 'Kisi-Kisi ASAS Kelas 2 - English [SHARE].pdf',
+      createdAt: 1732600000000,
+      bestScore: null,
+      questions: [
+        {
+          id: 'q1',
+          type: 'pg',
+          unit: 'Unit 1: Family Members',
+          visualEmoji: '👴👓🦯',
+          visualCaption: 'Ilustrasi gambar seorang kakek yang ramah berambut putih sedang tersenyum.',
+          question: 'Look at the picture! He is my father’s father. Who is he?',
+          options: [
+            { key: 'A', text: 'Grandmother' },
+            { key: 'B', text: 'Grandfather' },
+            { key: 'C', text: 'Uncle' },
+            { key: 'D', text: 'Brother' }
+          ],
+          correctAnswer: 'B',
+          explanation:
+            'Langkah 1: Perhatikan petunjuk "my father’s father" (ayah dari ayahku) dan gambar seorang kakek.\nLangkah 2: Dalam Bahasa Inggris, kakek adalah "Grandfather", sedangkan nenek adalah "Grandmother".\nLangkah 3: Maka jawaban yang tepat adalah B. Grandfather.',
+          trapWarning:
+            'Jangan tertukar antara "Grandfather" (kakek) dan "Grandmother" (nenek)! Perhatikan juga kata ganti "He" (dia laki-laki) pada soal.'
+        },
+        {
+          id: 'q2',
+          type: 'pg',
+          unit: 'Unit 1: Introducing Family',
+          visualEmoji: '👧👉👩🧕',
+          visualCaption: 'Aisyah menunjuk seorang wanita dewasa dan memperkenalkannya kepada temannya.',
+          question:
+            'Aisyah: "Hello, Zahra! ... my mother. Her name is Mrs. Fatimah."\nZahra: "Nice to meet you, Mrs. Fatimah."',
+          options: [
+            { key: 'A', text: 'This is' },
+            { key: 'B', text: 'He is' },
+            { key: 'C', text: 'They are' },
+            { key: 'D', text: 'I am' }
+          ],
+          correctAnswer: 'A',
+          explanation:
+            'Langkah 1: Aisyah sedang memperkenalkan ibunya ("my mother") kepada Zahra.\nLangkah 2: Ungkapan Bahasa Inggris untuk memperkenalkan satu anggota keluarga adalah "This is my...".\nLangkah 3: Jadi kalimat lengkapnya menjadi "This is my mother."',
+          trapWarning:
+            'Jangan pilih "He is" karena ibu adalah perempuan (seharusnya She is). Pilihan "This is" paling tepat untuk memperkenalkan seseorang secara langsung.'
+        },
+        {
+          id: 'q3',
+          type: 'pg',
+          unit: 'Unit 1: Adab to Parents (Birrul Walidain)',
+          visualEmoji: '🧕🗣️👦✨',
+          visualCaption: 'Ibu meminta tolong kepada Ahmad untuk mengambilkan buku di atas meja.',
+          question:
+            'Mother: "Ahmad, please help me take that book."\nAhmad: "..., Mom. I will take it for you."',
+          options: [
+            { key: 'A', text: 'No, I am busy' },
+            { key: 'B', text: 'Yes, certainly' },
+            { key: 'C', text: 'Go away' },
+            { key: 'D', text: 'I don’t care' }
+          ],
+          correctAnswer: 'B',
+          explanation:
+            'Langkah 1: Sebagai anak yang berbakti kepada orang tua (Birrul Walidain), saat orang tua meminta bantuan kita harus menjawab dengan ramah dan santun.\nLangkah 2: "Yes, certainly" artinya "Ya, tentu saja", merupakan jawaban sopan saat bersedia membantu.',
+          trapWarning:
+            'Hati-hati memilih jawaban yang bernada menolak atau kasar seperti "No, I am busy". Selalu pilih respons yang menunjukkan adab sopan santun.'
+        },
+        {
+          id: 'q4',
+          type: 'pg',
+          unit: 'Unit 2: Animals & Expressing Admiration',
+          visualEmoji: '🐘🦒🦓😲✨',
+          visualCaption: 'Ali melihat hewan gajah yang sangat besar dan indah ciptaan Allah di kebun binatang.',
+          question:
+            'Ali sees a very big and amazing elephant created by Allah. What should Ali say?',
+          options: [
+            { key: 'A', text: 'Innalillahi' },
+            { key: 'B', text: 'Astaghfirullah' },
+            { key: 'C', text: 'MasyaAllah' },
+            { key: 'D', text: 'See you later' }
+          ],
+          correctAnswer: 'C',
+          explanation:
+            'Langkah 1: Ali merasa takjub dan kagum saat melihat kebesaran ciptaan Allah (hewan gajah yang besar).\nLangkah 2: Kalimat thayyibah yang diucapkan ketika kagum melihat ciptaan Allah adalah "MasyaAllah".',
+          trapWarning:
+            'Jangan tertukar dengan "Astaghfirullah" (istighfar saat berbuat salah) atau "Innalillahi" (saat mendengar musibah).'
+        },
+        {
+          id: 'q5',
+          type: 'pg',
+          unit: 'Unit 2: Sirah Animals',
+          visualEmoji: '🕸️🕷️🕊️⛰️',
+          visualCaption: 'Ilustrasi pintu Gua Tsur yang tertutup jaring laba-laba dan sarang burung merpati.',
+          question:
+            'In the story of Cave Thawr (Gua Tsur), which small animal made a web to protect Prophet Muhammad SAW?',
+          options: [
+            { key: 'A', text: 'A spider' },
+            { key: 'B', text: 'A lion' },
+            { key: 'C', text: 'A rabbit' },
+            { key: 'D', text: 'A fish' }
+          ],
+          correctAnswer: 'A',
+          explanation:
+            'Langkah 1: Ingat kisah perjalanan hijrah Rasulullah SAW bersama Abu Bakar Ash-Shiddiq di Gua Tsur.\nLangkah 2: Allah memerintahkan seekor laba-laba ("spider") untuk membuat jaring ("web") dan burung merpati ("dove") bertelur di mulut gua sehingga musuh mengira gua itu kosong.',
+          trapWarning:
+            'Perhatikan kata kunci "made a web" (membuat jaring). Hewan yang membuat jaring adalah spider (laba-laba).'
+        },
+        {
+          id: 'q6',
+          type: 'pg',
+          unit: 'Unit 3: Helping at Home & Polite Words',
+          visualEmoji: '🧹🏠👦🤝👩',
+          visualCaption: 'Umar membantu ibunya menyapu lantai ruang tamu sampai bersih.',
+          question:
+            'Umar helps his mother sweep the floor.\nMother: "Thank you for helping me, Umar."\nUmar: "..."',
+          options: [
+            { key: 'A', text: 'I am sorry' },
+            { key: 'B', text: 'You are welcome' },
+            { key: 'C', text: 'Good night' },
+            { key: 'D', text: 'Help me' }
+          ],
+          correctAnswer: 'B',
+          explanation:
+            'Langkah 1: Ibu mengucapkan terima kasih ("Thank you") kepada Umar karena sudah membantu menyapu lantai.\nLangkah 2: Jawaban sopan saat seseorang mengucapkan "Thank you" adalah "You are welcome" (Sama-sama).',
+          trapWarning:
+            'Jangan tertukar dengan "I am sorry" (Saya minta maaf). "Thank you" selalu dijawab dengan "You are welcome".'
+        },
+        {
+          id: 'q7',
+          type: 'pg',
+          unit: 'Unit 4: Rooms in the House & Prepositions (in/on)',
+          visualEmoji: '📕⬆️🪑🛋️',
+          visualCaption: 'Sebuah buku cerita diletakkan menempel di atas permukaan meja di ruang tamu.',
+          question:
+            'Look at the living room! Where is the red book? The book is ... the table.',
+          options: [
+            { key: 'A', text: 'in' },
+            { key: 'B', text: 'on' },
+            { key: 'C', text: 'at' },
+            { key: 'D', text: 'to' }
+          ],
+          correctAnswer: 'B',
+          explanation:
+            'Langkah 1: Perhatikan posisi buku terhadap meja ("table"). Buku berada menempel di atas permukaan meja.\nLangkah 2: Preposisi tempat untuk "di atas permukaan" dalam Bahasa Inggris adalah "on".\nLangkah 3: Jadi kalimat yang tepat adalah "The book is on the table."',
+          trapWarning:
+            'Bedakan "on" (di atas permukaan meja) dengan "in" (di dalam wadah/laci tertutup).'
+        },
+        {
+          id: 'q8',
+          type: 'essay',
+          unit: 'Unit 2: Sentence Structure (a / an)',
+          visualEmoji: '🐘 Gray & Big',
+          visualCaption: 'Seekor gajah besar berwarna abu-abu dengan telinga lebar dan belalai panjang.',
+          question: 'Complete the sentence using "a" or "an":\n"It is ... elephant."',
+          sampleAnswer: 'an',
+          correctAnswer: 'an',
+          explanation:
+            'Langkah 1: Perhatikan huruf pertama dan bunyi awal dari kata "elephant".\nLangkah 2: Kata "elephant" diawali bunyi huruf vokal /e/ (a, i, u, e, o).\nLangkah 3: Untuk kata benda tunggal yang diawali bunyi vokal, gunakan artikel "an" -> "It is an elephant."',
+          trapWarning:
+            'Gunakan "an" di depan kata berbunyi vokal (seperti an apple, an elephant), dan gunakan "a" di depan kata berbunyi konsonan (seperti a cat, a big elephant).'
+        },
+        {
+          id: 'q9',
+          type: 'essay',
+          unit: 'Unit 3: Sentence Building (Word Order)',
+          visualEmoji: '🍽️🫧🧽👦',
+          visualCaption: 'Seorang anak sedang mencuci piring bersih di dapur setelah makan.',
+          question: 'Arrange these scrambled words into a correct sentence:\n"wash - I - the - dishes"',
+          sampleAnswer: 'I wash the dishes.',
+          correctAnswer: 'I wash the dishes.',
+          explanation:
+            'Langkah 1: Tentukan Subjek (pelaku) di awal kalimat -> "I".\nLangkah 2: Tentukan Kata Kerja (aktivitas) setelah subjek -> "wash".\nLangkah 3: Tambahkan Objek di akhir kalimat -> "the dishes".\nHasil susunan kalimat yang benar: "I wash the dishes."',
+          trapWarning:
+            'Jangan lupa memulai kalimat dengan huruf kapital "I" dan meletakkan kata "the" sebelum kata benda "dishes"!'
+        },
+        {
+          id: 'q10',
+          type: 'essay',
+          unit: 'Unit 4: Prepositions (in / on)',
+          visualEmoji: '🍎 ➡️ 🧺',
+          visualCaption: 'Gambar sebuah apel merah berada DI DALAM sebuah keranjang rotan.',
+          question:
+            'Look at the picture! Complete the sentence with "in" or "on":\n"The apple is ... the basket."',
+          sampleAnswer: 'in',
+          correctAnswer: 'in',
+          explanation:
+            'Langkah 1: Amati ilustrasi posisi buah apel terhadap keranjang ("basket").\nLangkah 2: Apel berada di dalam ruang keranjang, bukan di atas tutupnya.\nLangkah 3: Preposisi untuk "di dalam" adalah "in", sehingga menjadi "The apple is in the basket."',
+          trapWarning:
+            'Ingat! Benda yang masuk ke dalam wadah (kotak, tas, keranjang) selalu memakai kata depan "in", bukan "on".'
+        }
+      ]
+    };
+
+    // ========================================================================
+    // HELPER: EKSTRAK TEKS DARI PDF
+    // ========================================================================
+    async function extractTextFromPdfFile(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const totalPages = pdf.numPages;
+      let fullText = '';
+
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageStrings = textContent.items.map((item) => item.str);
+        fullText += `\n--- Halaman ${pageNum} ---\n` + pageStrings.join(' ');
+      }
+
+      return { text: fullText.trim(), numPages: totalPages };
+    }
+
+    // ========================================================================
+    // HELPER: PANGGIL GEMINI API DENGAN RETRY
+    // ========================================================================
+    async function fetchGeminiWithRetry(apiKey, payload, maxRetries = 3) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      let delay = 1000;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const msg = errData?.error?.message || `HTTP ${response.status}`;
+            if (response.status === 429 || response.status >= 500) {
+              throw new Error(msg);
+            }
+            throw new Error(msg);
+          }
+
+          return await response.json();
+        } catch (err) {
+          if (attempt === maxRetries) throw err;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay *= 2;
+        }
+      }
+    }
+
+    // ========================================================================
+    // KOMPONEN UTAMA APLIKASI
+    // ========================================================================
+    function App() {
+      // Penyimpanan Lokal (LocalStorage) agar paket soal & API Key tersimpan otomatis
+      const [geminiApiKey, setGeminiApiKey] = useState(() => {
+        return localStorage.getItem('juarakelas_gemini_key') || '';
+      });
+      const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+      const [tempApiKey, setTempApiKey] = useState('');
+
+      const [packages, setPackages] = useState(() => {
+        try {
+          const saved = localStorage.getItem('juarakelas_packages_v1');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch (e) {}
+        return [DEFAULT_BUILTIN_PACKAGE];
+      });
+
+      const [xpStars, setXpStars] = useState(() => {
+        return Number(localStorage.getItem('juarakelas_xp') || '150');
+      });
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('juarakelas_packages_v1', JSON.stringify(packages));
+        } catch (e) {}
+      }, [packages]);
+
+      useEffect(() => {
+        localStorage.setItem('juarakelas_xp', String(xpStars));
+      }, [xpStars]);
+
+      // State Navigasi & Filter
+      const [activeView, setActiveView] = useState('library');
+      const [selectedGrade, setSelectedGrade] = useState(2);
+      const [selectedSemester, setSelectedSemester] = useState(1);
+      const [activePackage, setActivePackage] = useState(DEFAULT_BUILTIN_PACKAGE);
+      const [packageToDelete, setPackageToDelete] = useState(null);
+
+      // State Pengerjaan Kuis
+      const [currentIdx, setCurrentIdx] = useState(0);
+      const [answers, setAnswers] = useState({});
+      const [unsureFlags, setUnsureFlags] = useState({});
+      const [quizStartTime, setQuizStartTime] = useState(Date.now());
+      const [elapsedDurationText, setElapsedDurationText] = useState('0 menit 0 detik');
+
+      // Timer Mode
+      const [timerEnabled, setTimerEnabled] = useState(false);
+      const [timeLeftSeconds, setTimeLeftSeconds] = useState(15 * 60);
+      const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+      // Modal & Status Proses
+      const [showUploadModal, setShowUploadModal] = useState(false);
+      const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+      const [isGrading, setIsGrading] = useState(false);
+      const [gradingResults, setGradingResults] = useState(null);
+      const [toastMessage, setToastMessage] = useState(null);
+
+      // State Form Upload PDF & Generator
+      const [genGrade, setGenGrade] = useState(2);
+      const [genSemester, setGenSemester] = useState(1);
+      const [genSubject, setGenSubject] = useState('');
+      const [genTitle, setGenTitle] = useState('');
+      const [genPgCount, setGenPgCount] = useState(7);
+      const [genEssayCount, setGenEssayCount] = useState(3);
+      const [inputMode, setInputMode] = useState('pdf');
+      const [uploadedPdfName, setUploadedPdfName] = useState('');
+      const [uploadedPdfPages, setUploadedPdfPages] = useState(0);
+      const [isExtractingPdf, setIsExtractingPdf] = useState(false);
+      const [kisiKisiText, setKisiKisiText] = useState('');
+      const [isGenerating, setIsGenerating] = useState(false);
+      const [generatorError, setGeneratorError] = useState('');
+      const fileInputRef = useRef(null);
+
+      const triggerToast = (msg, type = 'info') => {
+        setToastMessage({ msg, type });
+        setTimeout(() => setToastMessage(null), 3800);
+      };
+
+      const handleSaveApiKey = (e) => {
+        e.preventDefault();
+        const trimmed = tempApiKey.trim();
+        setGeminiApiKey(trimmed);
+        localStorage.setItem('juarakelas_gemini_key', trimmed);
+        setShowApiKeyModal(false);
+        triggerToast('Gemini API Key berhasil disimpan di perangkat ini!', 'success');
+      };
+
+      // Timer Countdown
+      useEffect(() => {
+        if (!timerEnabled || !isTimerRunning || activeView !== 'quiz') return;
+        if (timeLeftSeconds <= 0) {
+          setIsTimerRunning(false);
+          handleFinalizeAndGradeExam();
+          return;
+        }
+        const interval = setInterval(() => {
+          setTimeLeftSeconds((prev) => Math.max(0, prev - 1));
+        }, 1000);
+        return () => clearInterval(interval);
+      }, [timerEnabled, isTimerRunning, timeLeftSeconds, activeView]);
+
+      const formatTime = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      };
+
+      const handleStartPackage = (pkg) => {
+        setActivePackage(pkg);
+        setAnswers({});
+        setUnsureFlags({});
+        setCurrentIdx(0);
+        setGradingResults(null);
+        setShowSubmitConfirm(false);
+        setQuizStartTime(Date.now());
+        setTimeLeftSeconds(15 * 60);
+        setIsTimerRunning(timerEnabled);
+        setActiveView('quiz');
+      };
+
+      const handleToggleTimerMode = () => {
+        const nextState = !timerEnabled;
+        setTimerEnabled(nextState);
+        if (nextState) {
+          setTimeLeftSeconds(15 * 60);
+          setIsTimerRunning(true);
+          triggerToast('Mode Pakai Waktu 15 Menit aktif! Ayo fokus ya!', 'info');
+        } else {
+          setIsTimerRunning(false);
+          triggerToast('Mode Santai aktif! Belajar tenang tanpa batas waktu.', 'success');
+        }
+      };
+
+      const openUploadModalForCurrentFilter = () => {
+        if (!geminiApiKey) {
+          setTempApiKey('');
+          setShowApiKeyModal(true);
+          triggerToast('Masukkan Gemini API Key dulu ya sebelum membuat soal!', 'warning');
+          return;
+        }
+        setGenGrade(selectedGrade);
+        setGenSemester(selectedSemester);
+        setGenSubject('');
+        setGenTitle('');
+        setGenPgCount(7);
+        setGenEssayCount(3);
+        setInputMode('pdf');
+        setUploadedPdfName('');
+        setUploadedPdfPages(0);
+        setKisiKisiText('');
+        setGeneratorError('');
+        setShowUploadModal(true);
+      };
+
+      const handlePdfFileSelected = async (file) => {
+        if (!file) return;
+        if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+          setGeneratorError('Mohon unggah file berformat PDF (.pdf) ya.');
+          return;
+        }
+
+        setIsExtractingPdf(true);
+        setGeneratorError('');
+
+        try {
+          const { text, numPages } = await extractTextFromPdfFile(file);
+          if (!text || text.length < 15) {
+            setGeneratorError(
+              'Teks dalam PDF tidak terbaca (kemungkinan PDF berupa gambar hasil scan). Silakan pilih tab "Tempel Teks Manual".'
+            );
+            setIsExtractingPdf(false);
+            return;
+          }
+
+          setUploadedPdfName(file.name);
+          setUploadedPdfPages(numPages);
+          setKisiKisiText(text);
+
+          const cleanName = file.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ');
+          if (!genTitle) setGenTitle(cleanName);
+          if (!genSubject) {
+            const lower = cleanName.toLowerCase();
+            if (lower.includes('english') || lower.includes('inggris')) setGenSubject('Bahasa Inggris');
+            else if (lower.includes('matematika') || lower.includes('mtk')) setGenSubject('Matematika');
+            else if (lower.includes('ipas') || lower.includes('ipa')) setGenSubject('IPAS');
+            else if (lower.includes('indonesia')) setGenSubject('Bahasa Indonesia');
+            else if (lower.includes('pai') || lower.includes('agama') || lower.includes('quran'))
+              setGenSubject('Pendidikan Agama Islam');
+            else if (lower.includes('pancasila') || lower.includes('ppkn'))
+              setGenSubject('Pendidikan Pancasila');
+          }
+
+          triggerToast(`Berhasil membaca ${numPages} halaman dari ${file.name}!`, 'success');
+        } catch (err) {
+          setGeneratorError(`Gagal membaca file PDF: ${err.message}`);
+        } finally {
+          setIsExtractingPdf(false);
+        }
+      };
+
+      const handleGenerateAndSavePackage = async (e) => {
+        if (e) e.preventDefault();
+        if (!geminiApiKey) {
+          setShowUploadModal(false);
+          setShowApiKeyModal(true);
+          return;
+        }
+        if (!kisiKisiText.trim()) {
+          setGeneratorError('Silakan unggah file PDF kisi-kisi atau tempel teks kisi-kisi terlebih dahulu.');
+          return;
+        }
+
+        const finalSubject = genSubject.trim() || 'Tematik / Umum';
+        const finalTitle =
+          genTitle.trim() || `Latihan ${finalSubject} - Kelas ${genGrade} Semester ${genSemester}`;
+
+        setIsGenerating(true);
+        setGeneratorError('');
+
+        const systemPrompt = `Kamu adalah Guru SD profesional di Indonesia dan pembuat soal edukatif bergaya ceria ramah anak seperti "Juara Kelas".
+Tugasmu membuat paket soal latihan berdasarkan Kisi-Kisi PDF yang diberikan orang tua/guru.
+Aturan wajib:
+1. Buat tepat ${genPgCount} soal Pilihan Ganda (type: "pg") dan ${genEssayCount} soal Esai / Isian Singkat (type: "essay") sesuai indikator kisi-kisi.
+2. Sesuaikan tingkat kesulitan kosakata dan kalimat dengan siswa Kelas ${genGrade} SD (Semester ${genSemester}).
+3. Bahasa soal menyesuaikan mata pelajaran (jika Bahasa Inggris, pertanyaan & pilihan memakai Bahasa Inggris level SD yang ramah anak, tetapi "explanation" dan "trapWarning" wajib dalam Bahasa Indonesia yang ceria, jelas, dan mudah dipahami anak SD).
+4. Jika soal membutuhkan ilustrasi/gambar, isi field "visualEmoji" dengan rangkaian emoji kontekstual yang jelas dan "visualCaption" dengan keterangan gambar singkat agar siswa bisa menjawab tanpa gambar eksternal. Jika tidak butuh ilustrasi, isi string kosong "".
+5. Untuk soal Pilihan Ganda ("pg"), sediakan tepat 4 opsi ("A", "B", "C", "D") dan tentukan "correctAnswer" ("A", "B", "C", atau "D").
+6. Untuk soal Esai ("essay"), kosongkan array "options" ([]), isi "correctAnswer" dan "sampleAnswer" dengan kunci jawaban singkat yang benar.
+7. Field "explanation" wajib berisi pembahasan langkah demi langkah ramah anak ("Langkah 1: ... Langkah 2: ...").
+8. Field "trapWarning" wajib berisi tips peringatan kesalahan umum yang sering menjebak siswa.`;
+
+        const userQuery = `Mata Pelajaran: ${finalSubject}
+Jenjang: Kelas ${genGrade} SD - Semester ${genSemester}
+Jumlah Pilihan Ganda: ${genPgCount}
+Jumlah Esai / Isian: ${genEssayCount}
+
+ISI KISI-KISI DARI PDF:
+${kisiKisiText.slice(0, 28000)}`;
+
+        const payload = {
+          contents: [{ parts: [{ text: userQuery }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                questions: {
+                  type: 'ARRAY',
+                  items: {
+                    type: 'OBJECT',
+                    properties: {
+                      id: { type: 'STRING' },
+                      type: { type: 'STRING', enum: ['pg', 'essay'] },
+                      unit: { type: 'STRING' },
+                      visualEmoji: { type: 'STRING' },
+                      visualCaption: { type: 'STRING' },
+                      question: { type: 'STRING' },
+                      options: {
+                        type: 'ARRAY',
+                        items: {
+                          type: 'OBJECT',
+                          properties: {
+                            key: { type: 'STRING' },
+                            text: { type: 'STRING' }
+                          },
+                          required: ['key', 'text']
+                        }
+                      },
+                      correctAnswer: { type: 'STRING' },
+                      sampleAnswer: { type: 'STRING' },
+                      explanation: { type: 'STRING' },
+                      trapWarning: { type: 'STRING' }
+                    },
+                    required: [
+                      'id',
+                      'type',
+                      'unit',
+                      'visualEmoji',
+                      'visualCaption',
+                      'question',
+                      'options',
+                      'correctAnswer',
+                      'explanation',
+                      'trapWarning'
+                    ]
+                  }
+                }
+              },
+              required: ['questions']
+            }
+          }
+        };
+
+        try {
+          const result = await fetchGeminiWithRetry(geminiApiKey, payload);
+          const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) throw new Error('Respons dari Gemini kosong.');
+
+          const parsed = JSON.parse(rawText);
+          if (!parsed.questions || parsed.questions.length === 0) {
+            throw new Error('Soal belum berhasil dibuat.');
+          }
+
+          const normalizedQuestions = parsed.questions.map((q, idx) => ({
+            ...q,
+            id: `q_${Date.now()}_${idx + 1}`
+          }));
+
+          const newPackageObj = {
+            id: `pkg_kls${genGrade}_sem${genSemester}_${Date.now()}`,
+            isBuiltin: false,
+            grade: Number(genGrade),
+            semester: Number(genSemester),
+            subject: finalSubject,
+            title: finalTitle,
+            sourcePdfName: uploadedPdfName || 'Input Kisi-Kisi Manual',
+            createdAt: Date.now(),
+            bestScore: null,
+            questions: normalizedQuestions
+          };
+
+          setPackages((prev) => [newPackageObj, ...prev]);
+          setSelectedGrade(Number(genGrade));
+          setSelectedSemester(Number(genSemester));
+          setShowUploadModal(false);
+          setActiveView('library');
+
+          triggerToast(
+            `Hore! Paket soal tersimpan di Kelas ${genGrade} • Semester ${genSemester}!`,
+            'success'
+          );
+        } catch (err) {
+          setGeneratorError(
+            `Gagal membuat soal: ${err.message}. Pastikan Gemini API Key kamu benar dan aktif ya.`
+          );
+        } finally {
+          setIsGenerating(false);
+        }
+      };
+
+      const handleFinalizeAndGradeExam = async () => {
+        setShowSubmitConfirm(false);
+        setIsTimerRunning(false);
+        setIsGrading(true);
+
+        const diffSecs = Math.max(1, Math.round((Date.now() - quizStartTime) / 1000));
+        const mins = Math.floor(diffSecs / 60);
+        const secs = diffSecs % 60;
+        setElapsedDurationText(`${mins} menit ${secs} detik`);
+
+        const essayQuestions = activePackage.questions.filter((q) => q.type === 'essay');
+        let aiEssayEvaluations = {};
+
+        if (essayQuestions.length > 0 && geminiApiKey) {
+          try {
+            const essayPayloadList = essayQuestions.map((q) => ({
+              id: q.id,
+              question: q.question,
+              expectedAnswer: q.sampleAnswer || q.correctAnswer,
+              studentAnswer: (answers[q.id] || '').trim() || '(Tidak dijawab)'
+            }));
+
+            const systemPrompt = `Kamu adalah guru SD yang ramah, bijaksana, dan sangat menyemangati anak-anak.
+Tugasmu menilai jawaban Esai / Isian Singkat siswa Kelas ${activePackage.grade} SD (mapel ${activePackage.subject}).
+Aturan penilaian fleksibel:
+- Jangan menghukum kesalahan kecil pada huruf kapital atau tanda baca titik/koma.
+- Berikan skor 100 jika jawaban benar/sesuai makna kunci jawaban.
+- Berikan skor 50 sampai 85 jika jawaban hampir benar atau sebagian benar.
+- Berikan skor 0 jika jawaban salah jauh atau tidak dijawab.
+- Tulis "feedback" singkat dalam Bahasa Indonesia yang ramah anak (maksimal 2 kalimat).`;
+
+            const payload = {
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `Evaluasi jawaban esai siswa SD berikut ini:\n${JSON.stringify(
+                        essayPayloadList,
+                        null,
+                        2
+                      )}`
+                    }
+                  ]
+                }
+              ],
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              generationConfig: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: 'ARRAY',
+                  items: {
+                    type: 'OBJECT',
+                    properties: {
+                      id: { type: 'STRING' },
+                      score: { type: 'NUMBER' },
+                      isCorrect: { type: 'BOOLEAN' },
+                      feedback: { type: 'STRING' }
+                    },
+                    required: ['id', 'score', 'isCorrect', 'feedback']
+                  }
+                }
+              }
+            };
+
+            const result = await fetchGeminiWithRetry(geminiApiKey, payload);
+            const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawText) {
+              const parsedArray = JSON.parse(rawText);
+              parsedArray.forEach((item) => {
+                aiEssayEvaluations[item.id] = item;
+              });
+            }
+          } catch (err) {}
+        }
+
+        // Fallback tolerant grading jika API Key belum dipasang atau offline
+        essayQuestions.forEach((q) => {
+          if (!aiEssayEvaluations[q.id]) {
+            const cleanUser = (answers[q.id] || '').trim().toLowerCase().replace(/[.!?,]/g, '');
+            const cleanExpected = (q.sampleAnswer || q.correctAnswer || '')
+              .trim()
+              .toLowerCase()
+              .replace(/[.!?,]/g, '');
+
+            const isExact = cleanUser.length > 0 && cleanUser === cleanExpected;
+            const isPartial =
+              cleanUser.length > 0 &&
+              !isExact &&
+              (cleanExpected.includes(cleanUser) || cleanUser.includes(cleanExpected));
+
+            aiEssayEvaluations[q.id] = {
+              id: q.id,
+              score: isExact ? 100 : isPartial ? 70 : 0,
+              isCorrect: isExact || isPartial,
+              feedback: isExact
+                ? 'Hebat sekali! Jawabanmu tepat dan sesuai dengan kunci jawaban!'
+                : isPartial
+                ? 'Hampir sempurna! Kamu sudah menuliskan kata kuncinya, cek susunan lengkapnya di pembahasan ya.'
+                : 'Belum tepat, yuk baca pembahasan langkah demi langkah di bawah supaya makin paham!'
+            };
+          }
+        });
+
+        let accumulatedScore = 0;
+        let correctCount = 0;
+
+        const evaluatedItems = activePackage.questions.map((q, index) => {
+          const userAns = (answers[q.id] || '').trim();
+          if (q.type === 'pg') {
+            const isCorrect = userAns.toUpperCase() === q.correctAnswer.toUpperCase();
+            const itemScore = isCorrect ? 100 : 0;
+            accumulatedScore += itemScore;
+            if (isCorrect) correctCount += 1;
+
+            const selectedOptObj = q.options.find((o) => o.key === userAns);
+            const correctOptObj = q.options.find((o) => o.key === q.correctAnswer);
+
+            return {
+              ...q,
+              number: index + 1,
+              userAnswerDisplay: selectedOptObj
+                ? `${selectedOptObj.key}. ${selectedOptObj.text}`
+                : '(Belum dijawab)',
+              correctAnswerDisplay: correctOptObj
+                ? `${correctOptObj.key}. ${correctOptObj.text}`
+                : q.correctAnswer,
+              isCorrect,
+              score: itemScore,
+              aiFeedback: null
+            };
+          } else {
+            const aiEval = aiEssayEvaluations[q.id];
+            accumulatedScore += aiEval.score;
+            if (aiEval.score >= 70) correctCount += 1;
+
+            return {
+              ...q,
+              number: index + 1,
+              userAnswerDisplay: userAns || '(Belum dijawab)',
+              correctAnswerDisplay: q.sampleAnswer || q.correctAnswer,
+              isCorrect: aiEval.score >= 70,
+              score: aiEval.score,
+              aiFeedback: aiEval.feedback
+            };
+          }
+        });
+
+        const finalScore = Math.round(accumulatedScore / activePackage.questions.length);
+        const earnedStars = Math.max(10, Math.round(finalScore / 2));
+        setXpStars((prev) => prev + earnedStars);
+
+        const prevBest = activePackage.bestScore ?? -1;
+        if (finalScore > prevBest) {
+          const updatedPkg = { ...activePackage, bestScore: finalScore };
+          setActivePackage(updatedPkg);
+          setPackages((prev) => prev.map((p) => (p.id === updatedPkg.id ? updatedPkg : p)));
+        }
+
+        setGradingResults({
+          finalScore,
+          correctCount,
+          totalQuestions: activePackage.questions.length,
+          earnedStars,
+          items: evaluatedItems
+        });
+
+        setIsGrading(false);
+        setActiveView('results');
+      };
+
+      const filteredPackages = packages.filter(
+        (pkg) => Number(pkg.grade) === selectedGrade && Number(pkg.semester) === selectedSemester
+      );
+
+      const currentQuestion = activePackage.questions[currentIdx] || activePackage.questions[0];
+      const answeredCount = activePackage.questions.filter(
+        (q) => answers[q.id] && answers[q.id].trim().length > 0
+      ).length;
+      const unsureCount = activePackage.questions.filter((q) => unsureFlags[q.id]).length;
+
+      const getStarCount = (score) => {
+        if (score >= 90) return 5;
+        if (score >= 75) return 4;
+        if (score >= 60) return 3;
+        if (score >= 40) return 2;
+        return 1;
+      };
+
+      const getEncouragementMessage = (score) => {
+        if (score >= 90) return 'Luar Biasa! Kamu Bintang Juara Kelas Hari Ini! 🏆✨';
+        if (score >= 75) return 'Hebat Sekali! Sedikit Lagi Menuju Nilai Sempurna! 🌟👏';
+        if (score >= 60) return 'Bagus! Terus Berlatih Supaya Makin Jago Ya! 💪😊';
+        return 'Tetap Semangat! Yuk Pelajari Pembahasannya Bersama-sama! 🚀📚';
+      };
+
+      return (
+        <div className="pb-14">
+          {/* HEADER */}
+          <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b-2 border-sky-100 shadow-sm">
+            <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  setIsTimerRunning(false);
+                  setActiveView('library');
+                }}
+                className="flex items-center gap-2.5 text-left group focus:outline-none"
+              >
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white text-xl shadow-md shadow-sky-200">
+                  🎓
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
+                      Juara <span className="text-sky-600">Kelas</span>
+                    </h1>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      ⭐ {xpStars} XP
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {activeView === 'library'
+                      ? 'Bank Soal & Kisi-Kisi Pintar Kelas 1 – 6 SD'
+                      : `Kelas ${activePackage.grade} • Semester ${activePackage.semester} • ${activePackage.subject}`}
+                  </p>
+                </div>
+              </button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {activeView === 'quiz' ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        setIsTimerRunning(false);
+                        setActiveView('library');
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      ← Daftar Paket
+                    </button>
+                    <button
+                      onClick={handleToggleTimerMode}
+                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border-2 shadow-sm ${
+                        timerEnabled
+                          ? 'bg-rose-50 border-rose-300 text-rose-700'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      }`}
+                    >
+                      {timerEnabled ? `⏱️ Waktu: ${formatTime(timeLeftSeconds)}` : '🌿 Mode Santai'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setTempApiKey(geminiApiKey);
+                        setShowApiKeyModal(true);
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border-2 transition-all ${
+                        geminiApiKey
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          : 'bg-amber-50 border-amber-300 text-amber-800 animate-pulse'
+                      }`}
+                    >
+                      {geminiApiKey ? '🔑 Gemini Aktif' : '🔑 Pasang API Key'}
+                    </button>
+
+                    <button
+                      onClick={openUploadModalForCurrentFilter}
+                      className="px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md shadow-indigo-200"
+                    >
+                      + Upload PDF Kisi-Kisi
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* TOAST */}
+          {toastMessage && (
+            <div className="fixed bottom-5 right-5 z-50">
+              <div
+                className={`px-4 py-3 rounded-2xl shadow-lg border-2 font-bold text-sm ${
+                  toastMessage.type === 'success'
+                    ? 'bg-emerald-600 border-emerald-400 text-white'
+                    : toastMessage.type === 'warning'
+                    ? 'bg-amber-500 border-amber-300 text-white'
+                    : 'bg-sky-600 border-sky-400 text-white'
+                }`}
+              >
+                😊 {toastMessage.msg}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 1: LIBRARY PER KELAS & SEMESTER */}
+          {activeView === 'library' && (
+            <main className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
+              <div className="bg-white rounded-3xl border-2 border-sky-100 shadow-sm p-5 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                <div className="space-y-1.5">
+                  <span className="inline-block px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-extrabold">
+                    ✨ Belajar Ceria Berbasis Kisi-Kisi Sekolah
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                    Pilih Kelas & Semester untuk Mulai Latihan!
+                  </h2>
+                  <p className="text-sm text-slate-600 max-w-2xl">
+                    Unggah file <strong>PDF Kisi-Kisi</strong> sesuai Kelas dan Semester, lalu Gemini AI
+                    akan otomatis membuat soal Pilihan Ganda & Esai lengkap dengan pembahasan.
+                  </p>
+                </div>
+
+                <button
+                  onClick={openUploadModalForCurrentFilter}
+                  className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-200"
+                >
+                  📄 + Upload PDF Kisi-Kisi Baru
+                </button>
+              </div>
+
+              {/* FILTER KELAS & SEMESTER */}
+              <div className="bg-white rounded-3xl border-2 border-sky-100 shadow-sm p-5 space-y-5">
+                <div>
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block mb-2.5">
+                    1. Pilih Jenjang Kelas SD:
+                  </span>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                    {[1, 2, 3, 4, 5, 6].map((gradeNum) => {
+                      const isActive = selectedGrade === gradeNum;
+                      const countInGrade = packages.filter((p) => Number(p.grade) === gradeNum).length;
+                      return (
+                        <button
+                          key={gradeNum}
+                          type="button"
+                          onClick={() => setSelectedGrade(gradeNum)}
+                          className={`py-3 px-3 rounded-2xl border-2 font-extrabold text-sm transition-all flex flex-col items-center justify-center gap-0.5 ${
+                            isActive
+                              ? 'bg-sky-600 border-sky-600 text-white shadow-md shadow-sky-200'
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-sky-300'
+                          }`}
+                        >
+                          <span>Kelas {gradeNum}</span>
+                          <span className={`text-[11px] font-bold ${isActive ? 'text-sky-100' : 'text-slate-400'}`}>
+                            {countInGrade} Paket
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 block mb-2">
+                      2. Pilih Semester:
+                    </span>
+                    <div className="inline-flex p-1.5 rounded-2xl bg-slate-100 border border-slate-200">
+                      {[
+                        { val: 1, label: '📅 Semester 1 (Ganjil)' },
+                        { val: 2, label: '📅 Semester 2 (Genap)' }
+                      ].map((sem) => (
+                        <button
+                          key={sem.val}
+                          type="button"
+                          onClick={() => setSelectedSemester(sem.val)}
+                          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all ${
+                            selectedSemester === sem.val
+                              ? 'bg-white text-indigo-700 shadow-sm'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {sem.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="text-xs sm:text-sm font-bold text-slate-600 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-2xl">
+                    Menampilkan:{' '}
+                    <span className="text-indigo-700 font-extrabold">
+                      Kelas {selectedGrade} SD • Semester {selectedSemester}
+                    </span>{' '}
+                    ({filteredPackages.length} Paket)
+                  </div>
+                </div>
+              </div>
+
+              {/* DAFTAR PAKET SOAL */}
+              {filteredPackages.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {filteredPackages.map((pkg) => {
+                    const pgCount = pkg.questions.filter((q) => q.type === 'pg').length;
+                    const essayCount = pkg.questions.filter((q) => q.type === 'essay').length;
+                    return (
+                      <div
+                        key={pkg.id}
+                        className="bg-white rounded-3xl border-2 border-sky-100 hover:border-indigo-300 shadow-sm p-5 sm:p-6 flex flex-col justify-between gap-4"
+                      >
+                        <div>
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="px-3 py-1 rounded-xl bg-indigo-100 text-indigo-800 font-extrabold text-xs">
+                                {pkg.subject}
+                              </span>
+                              <span className="px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 font-bold text-xs">
+                                Kls {pkg.grade} • Sem {pkg.semester}
+                              </span>
+                            </div>
+                            {pkg.bestScore !== null && pkg.bestScore !== undefined ? (
+                              <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-xs border border-amber-200">
+                                🏆 Skor Terbaik: {pkg.bestScore}
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold text-xs">
+                                Belum Dikerjakan
+                              </span>
+                            )}
+                          </div>
+
+                          <h3 className="text-lg font-extrabold text-slate-900 mb-2 leading-snug">
+                            {pkg.title}
+                          </h3>
+
+                          {pkg.sourcePdfName && (
+                            <div className="text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80 mb-3 truncate">
+                              📄 Sumber: {pkg.sourcePdfName}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
+                            <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800">
+                              {pgCount} Pilihan Ganda
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800">
+                              {essayCount} Esai / Isian
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleStartPackage(pkg)}
+                            className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white font-extrabold text-sm shadow-md shadow-sky-200"
+                          >
+                            ▶️ Mulai Latihan
+                          </button>
+                          {!pkg.isBuiltin && (
+                            <button
+                              type="button"
+                              onClick={() => setPackageToDelete(pkg)}
+                              className="p-3 rounded-2xl border-2 border-rose-100 text-rose-500 hover:bg-rose-50 font-bold text-xs"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl border-2 border-dashed border-sky-200 p-10 text-center space-y-4">
+                  <div className="text-5xl">📂</div>
+                  <h3 className="text-lg font-extrabold text-slate-900">
+                    Belum Ada Paket Soal untuk Kelas {selectedGrade} • Semester {selectedSemester}
+                  </h3>
+                  <p className="text-sm text-slate-500 max-w-md mx-auto">
+                    Yuk unggah file PDF kisi-kisi pelajaran untuk Kelas {selectedGrade} Semester{' '}
+                    {selectedSemester}, dan biarkan Gemini AI membuatkan soal latihannya!
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openUploadModalForCurrentFilter}
+                    className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-sm shadow-md shadow-indigo-200"
+                  >
+                    📄 Upload Kisi-Kisi PDF Sekarang
+                  </button>
+                </div>
+              )}
+            </main>
+          )}
+
+          {/* VIEW 2: QUIZ MODE */}
+          {activeView === 'quiz' && currentQuestion && (
+            <main className="max-w-6xl mx-auto px-4 pt-6">
+              <div className="bg-white rounded-2xl p-4 mb-6 border-2 border-sky-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="px-3 py-1 rounded-xl bg-sky-100 text-sky-800 font-extrabold text-xs sm:text-sm">
+                    Soal {currentIdx + 1} dari {activePackage.questions.length}
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-slate-600">
+                    Terjawab: <strong className="text-indigo-600">{answeredCount}</strong> /{' '}
+                    {activePackage.questions.length}
+                  </span>
+                </div>
+                <div className="w-full sm:w-64 h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                  <div
+                    className="h-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-300"
+                    style={{
+                      width: `${Math.round((answeredCount / activePackage.questions.length) * 100)}%`
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="lg:col-span-8 bg-white rounded-3xl border-2 border-sky-100 shadow-md p-5 sm:p-8">
+                  <div className="flex flex-wrap items-center gap-2 mb-5">
+                    <span className="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white font-extrabold text-sm">
+                      No. {currentIdx + 1}
+                    </span>
+                    <span
+                      className={`px-3.5 py-1.5 rounded-xl font-bold text-xs sm:text-sm border ${
+                        currentQuestion.type === 'pg'
+                          ? 'bg-sky-50 text-sky-700 border-sky-200'
+                          : 'bg-purple-50 text-purple-700 border-purple-200'
+                      }`}
+                    >
+                      {currentQuestion.type === 'pg' ? 'Pilihan Ganda' : 'Esai / Isian'}
+                    </span>
+                    <span className="px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-bold text-xs sm:text-sm">
+                      📚 {currentQuestion.unit}
+                    </span>
+                    {unsureFlags[currentQuestion.id] && (
+                      <span className="px-3 py-1 rounded-xl bg-amber-400 text-slate-900 font-extrabold text-xs">
+                        ❓ Ragu-ragu
+                      </span>
+                    )}
+                  </div>
+
+                  {(currentQuestion.visualEmoji || currentQuestion.visualCaption) && (
+                    <div className="mb-6 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50/70 border-2 border-dashed border-sky-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4">
+                      {currentQuestion.visualEmoji && (
+                        <div className="text-4xl sm:text-5xl bg-white px-5 py-3.5 rounded-2xl shadow-sm border border-sky-100 shrink-0">
+                          {currentQuestion.visualEmoji}
+                        </div>
+                      )}
+                      {currentQuestion.visualCaption && (
+                        <div className="text-center sm:text-left">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-sky-600 block mb-0.5">
+                            Ilustrasi Gambar
+                          </span>
+                          <p className="text-sm sm:text-base font-medium text-slate-700">
+                            {currentQuestion.visualCaption}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mb-7">
+                    <p className="text-lg sm:text-xl font-bold text-slate-800 leading-relaxed whitespace-pre-line">
+                      {currentQuestion.question}
+                    </p>
+                  </div>
+
+                  {currentQuestion.type === 'pg' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-8">
+                      {currentQuestion.options.map((opt) => {
+                        const isSelected = answers[currentQuestion.id] === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() =>
+                              setAnswers((prev) => ({ ...prev, [currentQuestion.id]: opt.key }))
+                            }
+                            className={`p-4 rounded-2xl border-2 text-left transition-all flex items-center gap-3.5 ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-500 shadow-md shadow-indigo-100'
+                                : 'bg-white border-slate-200 hover:border-sky-400'
+                            }`}
+                          >
+                            <span
+                              className={`w-10 h-10 rounded-xl font-extrabold text-base flex items-center justify-center shrink-0 ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {opt.key}
+                            </span>
+                            <span className="text-base sm:text-lg font-bold text-slate-800">
+                              {opt.text}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="mb-8">
+                      <label className="block text-sm font-bold text-slate-600 mb-2">
+                        ✏️ Ketik jawabanmu di kotak bawah ini ya:
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={answers[currentQuestion.id] || ''}
+                        onChange={(e) =>
+                          setAnswers((prev) => ({ ...prev, [currentQuestion.id]: e.target.value }))
+                        }
+                        placeholder="Tulis jawabanmu di sini..."
+                        className="w-full p-4 rounded-2xl border-2 border-purple-200 focus:border-purple-500 outline-none text-base sm:text-lg font-bold text-slate-800 bg-purple-50/20"
+                      />
+                    </div>
+                  )}
+
+                  <div className="pt-5 border-t-2 border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      disabled={currentIdx === 0}
+                      onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
+                      className="px-4 py-2.5 rounded-xl font-bold text-sm border-2 border-slate-200 text-slate-700 disabled:opacity-40"
+                    >
+                      ← Sebelumnya
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setUnsureFlags((prev) => ({
+                          ...prev,
+                          [currentQuestion.id]: !prev[currentQuestion.id]
+                        }))
+                      }
+                      className={`px-4 py-2.5 rounded-xl font-bold text-sm border-2 ${
+                        unsureFlags[currentQuestion.id]
+                          ? 'bg-amber-400 border-amber-500 text-slate-900'
+                          : 'bg-amber-50 border-amber-300 text-amber-800'
+                      }`}
+                    >
+                      ❓ Ragu-ragu
+                    </button>
+
+                    {currentIdx < activePackage.questions.length - 1 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentIdx((prev) =>
+                            Math.min(activePackage.questions.length - 1, prev + 1)
+                          )
+                        }
+                        className="px-5 py-2.5 rounded-xl font-bold text-sm bg-sky-600 text-white hover:bg-sky-700"
+                      >
+                        Selanjutnya →
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowSubmitConfirm(true)}
+                        className="px-5 py-2.5 rounded-xl font-extrabold text-sm bg-emerald-600 text-white hover:bg-emerald-700"
+                      >
+                        ✅ Kumpulkan & Cek Nilai
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* NAVIGASI NOMOR */}
+                <aside className="lg:col-span-4 bg-white rounded-3xl border-2 border-sky-100 shadow-md p-5 sm:p-6 sticky top-24">
+                  <h2 className="font-extrabold text-base text-slate-800 mb-4">
+                    🔢 Navigasi Nomor Soal ({activePackage.questions.length} Soal)
+                  </h2>
+                  <div className="grid grid-cols-5 gap-2.5 mb-5">
+                    {activePackage.questions.map((q, idx) => {
+                      const isCurrent = idx === currentIdx;
+                      const isAnswered = Boolean(answers[q.id] && answers[q.id].trim().length > 0);
+                      const isUnsure = Boolean(unsureFlags[q.id]);
+                      let btnStyle = 'bg-slate-50 border-slate-200 text-slate-600';
+                      if (isUnsure) btnStyle = 'bg-amber-400 border-amber-500 text-slate-900';
+                      else if (isAnswered) btnStyle = 'bg-indigo-600 border-indigo-600 text-white';
+
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => setCurrentIdx(idx)}
+                          className={`h-11 rounded-xl font-extrabold text-sm border-2 ${btnStyle} ${
+                            isCurrent ? 'ring-4 ring-sky-300' : ''
+                          }`}
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitConfirm(true)}
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-sm shadow-md"
+                  >
+                    ✅ Kumpulkan & Cek Nilai
+                  </button>
+                </aside>
+              </div>
+            </main>
+          )}
+
+          {/* VIEW 3: HASIL & PEMBAHASAN */}
+          {activeView === 'results' && gradingResults && (
+            <main className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
+              <div className="bg-white rounded-3xl border-2 border-amber-200 shadow-lg p-6 sm:p-8 text-center">
+                <div className="text-5xl mb-3">🏆</div>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                  {getEncouragementMessage(gradingResults.finalScore)}
+                </h2>
+                <p className="text-xs sm:text-sm font-bold text-slate-500 mt-1">
+                  {activePackage.title} • Waktu pengerjaan: {elapsedDurationText}
+                </p>
+
+                <div className="text-3xl my-3">
+                  {'⭐'.repeat(getStarCount(gradingResults.finalScore))}
+                </div>
+
+                <div className="my-5 inline-flex flex-wrap items-center justify-center gap-6 bg-sky-50 border-2 border-sky-100 px-8 py-4 rounded-3xl">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase text-slate-500 block">
+                      Nilai Akhir
+                    </span>
+                    <span className="text-4xl font-black text-indigo-600">
+                      {gradingResults.finalScore}
+                    </span>
+                    <span className="text-sm font-bold text-slate-400"> / 100</span>
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold uppercase text-slate-500 block">
+                      Jawaban Tepat
+                    </span>
+                    <span className="text-2xl font-black text-emerald-600">
+                      {gradingResults.correctCount} / {gradingResults.totalQuestions}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleStartPackage(activePackage)}
+                    className="px-6 py-3 rounded-2xl bg-sky-600 text-white font-extrabold text-sm"
+                  >
+                    🔄 Ulangi Paket Ini
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveView('library')}
+                    className="px-6 py-3 rounded-2xl bg-indigo-50 text-indigo-700 border-2 border-indigo-200 font-extrabold text-sm"
+                  >
+                    📂 Kembali ke Daftar Kelas & Semester
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 px-1">
+                  🏅 Pembahasan Lengkap & Tips Awas Jebakan
+                </h3>
+
+                {gradingResults.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-3xl border-2 p-5 sm:p-7 shadow-sm ${
+                      item.isCorrect ? 'border-emerald-200' : 'border-rose-200'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <span className="px-3 py-1 rounded-xl bg-slate-800 text-white font-extrabold text-xs">
+                        Soal No. {item.number} • {item.unit}
+                      </span>
+                      <span
+                        className={`px-3.5 py-1 rounded-full font-extrabold text-xs ${
+                          item.isCorrect
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {item.isCorrect ? `✅ Benar (+${item.score})` : `❌ Perlu Diperbaiki (${item.score})`}
+                      </span>
+                    </div>
+
+                    <p className="text-base sm:text-lg font-bold text-slate-800 mb-4 whitespace-pre-line">
+                      {item.question}
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                        <span className="text-xs font-extrabold uppercase text-slate-500 block mb-1">
+                          Jawaban Kamu:
+                        </span>
+                        <p className="font-bold text-sm text-slate-800">{item.userAnswerDisplay}</p>
+                      </div>
+                      <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200">
+                        <span className="text-xs font-extrabold uppercase text-sky-700 block mb-1">
+                          Kunci Jawaban:
+                        </span>
+                        <p className="font-bold text-sm text-sky-950">{item.correctAnswerDisplay}</p>
+                      </div>
+                    </div>
+
+                    {item.aiFeedback && (
+                      <div className="mb-4 p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-purple-900 text-sm font-semibold">
+                        ✨ <strong>Catatan Guru AI:</strong> {item.aiFeedback}
+                      </div>
+                    )}
+
+                    <div className="mb-3.5 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200">
+                      <div className="text-emerald-800 font-extrabold text-sm mb-1">
+                        💡 Pembahasan Langkah demi Langkah
+                      </div>
+                      <p className="text-sm text-emerald-950 leading-relaxed whitespace-pre-line font-medium">
+                        {item.explanation}
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300">
+                      <div className="text-amber-900 font-extrabold text-sm mb-1">
+                        ⚠️ Awas Jebakan!
+                      </div>
+                      <p className="text-sm text-amber-950 leading-relaxed font-medium">
+                        {item.trapWarning}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </main>
+          )}
+
+          {/* MODAL API KEY */}
+          {showApiKeyModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 border-2 border-sky-100 shadow-2xl">
+                <h3 className="text-lg font-extrabold text-slate-900 mb-1">
+                  🔑 Pengaturan Gemini API Key
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Tempel kode API Key dari Google AI Studio agar fitur Upload PDF & Koreksi Esai otomatis berjalan. Kunci ini disimpan aman di browser perangkat ini saja.
+                </p>
+                <form onSubmit={handleSaveApiKey} className="space-y-4">
+                  <input
+                    type="password"
+                    value={tempApiKey}
+                    onChange={(e) => setTempApiKey(e.target.value)}
+                    placeholder="Tempel kode AIzaSy... di sini"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKeyModal(false)}
+                      className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-600"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-extrabold text-sm"
+                    >
+                      Simpan Kunci
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL UPLOAD PDF */}
+          {showUploadModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+              <div className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-8 border-2 border-indigo-100 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
+                <div className="flex items-start justify-between gap-4 pb-4 mb-5 border-b-2 border-slate-100">
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                      📄 Upload Kisi-Kisi PDF & Buat Paket Soal AI
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-500">
+                      Simpan paket soal terorganisir per Kelas & Semester.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => !isGenerating && setShowUploadModal(false)}
+                    className="px-3 py-1 rounded-xl text-slate-500 hover:bg-slate-100 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {generatorError && (
+                  <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-800 text-xs font-semibold">
+                    ⚠️ {generatorError}
+                  </div>
+                )}
+
+                <form onSubmit={handleGenerateAndSavePackage} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                        Simpan ke Kelas
+                      </label>
+                      <select
+                        value={genGrade}
+                        onChange={(e) => setGenGrade(Number(e.target.value))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm bg-white"
+                      >
+                        {[1, 2, 3, 4, 5, 6].map((g) => (
+                          <option key={g} value={g}>
+                            Kelas {g} SD
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                        Simpan ke Semester
+                      </label>
+                      <select
+                        value={genSemester}
+                        onChange={(e) => setGenSemester(Number(e.target.value))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm bg-white"
+                      >
+                        <option value={1}>Semester 1 (Ganjil)</option>
+                        <option value={2}>Semester 2 (Genap)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                        Mata Pelajaran
+                      </label>
+                      <input
+                        type="text"
+                        value={genSubject}
+                        onChange={(e) => setGenSubject(e.target.value)}
+                        placeholder="Contoh: Matematika, IPAS, English"
+                        className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                        Judul Paket Latihan
+                      </label>
+                      <input
+                        type="text"
+                        value={genTitle}
+                        onChange={(e) => setGenTitle(e.target.value)}
+                        placeholder="Contoh: Latihan ASAS Bab 1 - 4"
+                        className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                        Jumlah Pilihan Ganda
+                      </label>
+                      <input
+                        type="number"
+                        min={3}
+                        max={15}
+                        value={genPgCount}
+                        onChange={(e) => setGenPgCount(Number(e.target.value))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-extrabold text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                        Jumlah Soal Esai
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={genEssayCount}
+                        onChange={(e) => setGenEssayCount(Number(e.target.value))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-extrabold text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-extrabold uppercase text-slate-600">
+                        Sumber Kisi-Kisi:
+                      </span>
+                      <div className="inline-flex p-1 rounded-xl bg-slate-100 text-xs font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setInputMode('pdf')}
+                          className={`px-3 py-1 rounded-lg ${
+                            inputMode === 'pdf' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
+                          }`}
+                        >
+                          Upload PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInputMode('manual')}
+                          className={`px-3 py-1 rounded-lg ${
+                            inputMode === 'manual' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
+                          }`}
+                        >
+                          Tempel Teks
+                        </button>
+                      </div>
+                    </div>
+
+                    {inputMode === 'pdf' ? (
+                      <div className="space-y-3">
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          className="border-2 border-dashed border-indigo-300 bg-indigo-50/40 rounded-2xl p-6 text-center cursor-pointer"
+                        >
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            onChange={(e) => handlePdfFileSelected(e.target.files?.[0])}
+                            className="hidden"
+                          />
+                          {isExtractingPdf ? (
+                            <p className="font-extrabold text-sm text-indigo-700">
+                              ⏳ Membaca isi dokumen PDF...
+                            </p>
+                          ) : uploadedPdfName ? (
+                            <div>
+                              <p className="font-extrabold text-sm text-slate-900">
+                                📄 {uploadedPdfName}
+                              </p>
+                              <p className="text-xs font-bold text-emerald-700 mt-1">
+                                ✓ {uploadedPdfPages} Halaman Berhasil Diekstrak
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <p className="font-extrabold text-sm text-slate-800">
+                                Klik untuk pilih file PDF Kisi-Kisi
+                              </p>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Mendukung file PDF kisi-kisi sekolah (.pdf)
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {kisiKisiText && (
+                          <textarea
+                            rows={4}
+                            value={kisiKisiText}
+                            onChange={(e) => setKisiKisiText(e.target.value)}
+                            className="w-full p-3 rounded-xl border border-slate-200 text-xs bg-slate-50"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <textarea
+                        rows={5}
+                        value={kisiKisiText}
+                        onChange={(e) => setKisiKisiText(e.target.value)}
+                        placeholder="Tempelkan teks kisi-kisi di sini..."
+                        className="w-full p-3.5 rounded-2xl border-2 border-slate-200 text-xs sm:text-sm"
+                      />
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      disabled={isGenerating}
+                      onClick={() => setShowUploadModal(false)}
+                      className="px-5 py-3 rounded-2xl border-2 border-slate-200 font-bold text-sm text-slate-600"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isGenerating || isExtractingPdf}
+                      className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-sm shadow-lg"
+                    >
+                      {isGenerating ? '⏳ Meracik Soal...' : '✨ Generate & Simpan Soal'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL KONFIRMASI HAPUS */}
+          {packageToDelete && (
+            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 border-2 border-rose-100 shadow-2xl text-center">
+                <h3 className="text-lg font-extrabold text-slate-900 mb-2">Hapus Paket Soal Ini?</h3>
+                <p className="text-sm text-slate-600 mb-5">
+                  Paket <strong>"{packageToDelete.title}"</strong> akan dihapus.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPackageToDelete(null)}
+                    className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPackages((prev) => prev.filter((p) => p.id !== packageToDelete.id));
+                      setPackageToDelete(null);
+                      triggerToast('Paket soal dihapus.', 'info');
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-extrabold text-sm"
+                  >
+                    Ya, Hapus
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL KONFIRMASI KUMPULKAN */}
+          {showSubmitConfirm && (
+            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-sky-100 shadow-2xl text-center">
+                <div className="text-4xl mb-3">✅</div>
+                <h3 className="text-xl font-extrabold text-slate-900 mb-2">
+                  Sudah Yakin Ingin Mengumpulkan?
+                </h3>
+                <p className="text-sm text-slate-600 mb-5 leading-relaxed">
+                  Kamu sudah menjawab <strong>{answeredCount}</strong> dari{' '}
+                  <strong>{activePackage.questions.length}</strong> soal
+                  {unsureCount > 0 ? ` (masih ada ${unsureCount} soal ditandai ragu-ragu)` : ''}.
+                  Yuk cek hasilnya sekarang!
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowSubmitConfirm(false)}
+                    className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700 hover:bg-slate-100"
+                  >
+                    Cek Lagi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFinalizeAndGradeExam}
+                    className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-md"
+                  >
+                    Ya, Kumpulkan!
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* LOADING OVERLAY SAAT MENGOREKSI */}
+          {isGrading && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl max-w-sm w-full p-7 border-2 border-indigo-100 shadow-2xl text-center">
+                <div className="text-4xl animate-spin mb-4">⏳</div>
+                <h3 className="text-lg font-extrabold text-slate-900 mb-1.5">
+                  Sebentar Ya, Sedang Mengoreksi...
+                </h3>
+                <p className="text-sm text-slate-600">
+                  Kakak AI sedang memeriksa jawaban Pilihan Ganda dan Esaimu dengan teliti! ✨
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
