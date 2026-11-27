@@ -1342,4 +1342,1472 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
           }
         });
 
-        let accumulatedScore =
+        let accumulatedScore = 0;
+        let correctCount = 0;
+
+        const evaluatedItems = activePackage.questions.map((q, index) => {
+          const userAns = (answers[q.id] || '').trim();
+          if (q.type === 'pg') {
+            const isCorrect = userAns.toUpperCase() === q.correctAnswer.toUpperCase();
+            const itemScore = isCorrect ? 100 : 0;
+            accumulatedScore += itemScore;
+            if (isCorrect) correctCount += 1;
+
+            const selectedOptObj = q.options.find((o) => o.key === userAns);
+            const correctOptObj = q.options.find((o) => o.key === q.correctAnswer);
+
+            return {
+              ...q,
+              number: index + 1,
+              userAnswerDisplay: selectedOptObj
+                ? `${selectedOptObj.key}. ${selectedOptObj.text}`
+                : '(Belum dijawab)',
+              correctAnswerDisplay: correctOptObj
+                ? `${correctOptObj.key}. ${correctOptObj.text}`
+                : q.correctAnswer,
+              isCorrect,
+              score: itemScore,
+              aiFeedback: null
+            };
+          } else {
+            const aiEval = aiEssayEvaluations[q.id];
+            accumulatedScore += aiEval.score;
+            if (aiEval.score >= 70) correctCount += 1;
+
+            return {
+              ...q,
+              number: index + 1,
+              userAnswerDisplay: userAns || '(Belum dijawab)',
+              correctAnswerDisplay: q.sampleAnswer || q.correctAnswer,
+              isCorrect: aiEval.score >= 70,
+              score: aiEval.score,
+              aiFeedback: aiEval.feedback
+            };
+          }
+        });
+
+        const finalScore = Math.round(accumulatedScore / activePackage.questions.length);
+        const earnedStars = Math.max(10, Math.round(finalScore / 2));
+        setXpStars((prev) => prev + earnedStars);
+
+        const basePkg = packages.find((p) => p.id === activePackage.id) || activePackage;
+        const prevBest = basePkg.bestScore ?? -1;
+        if (finalScore > prevBest) {
+          const updatedPkg = { ...basePkg, bestScore: finalScore };
+          setPackages((prev) => prev.map((p) => (p.id === basePkg.id ? updatedPkg : p)));
+          await savePackageToCloud(updatedPkg);
+        }
+
+        setGradingResults({
+          finalScore,
+          correctCount,
+          totalQuestions: activePackage.questions.length,
+          earnedStars,
+          items: evaluatedItems
+        });
+
+        setIsGrading(false);
+        navigateToView('results');
+      };
+
+      const filteredPackages = packages.filter(
+        (pkg) => Number(pkg.grade) === selectedGrade && Number(pkg.semester) === selectedSemester
+      );
+
+      const currentQuestion = activePackage.questions[currentIdx] || activePackage.questions[0];
+      const answeredCount = activePackage.questions.filter(
+        (q) => answers[q.id] && answers[q.id].trim().length > 0
+      ).length;
+      const unsureCount = activePackage.questions.filter((q) => unsureFlags[q.id]).length;
+
+      return (
+        <div className="min-h-screen flex flex-col justify-between">
+          <div className="pb-12">
+            {/* HEADER */}
+            <header className="sticky top-0 z-30 bg-[#1a1c42]/95 border-b border-white/10 shadow-lg">
+              <div className="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  onClick={() => {
+                    setIsTimerRunning(false);
+                    navigateToView('library');
+                  }}
+                  className="flex items-center gap-3 text-left group"
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl shadow-md">
+                    🎓
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white">
+                        Juara <span className="text-amber-300">Kelas</span>
+                      </h1>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-400/20 text-amber-300 border border-amber-300/30">
+                        ⭐ {xpStars} XP
+                      </span>
+                    </div>
+                    <p className="text-xs font-semibold text-indigo-200">
+                      {activeView === 'library'
+                        ? 'Bank Soal & Kisi-Kisi Pintar Kelas 1 – 6 SD'
+                        : `Kelas ${activePackage.grade} • Semester ${activePackage.semester} • ${activePackage.subject}`}
+                    </p>
+                  </div>
+                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeView === 'quiz' ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setIsTimerRunning(false);
+                          navigateToView('library');
+                        }}
+                        className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15"
+                      >
+                        ← Daftar Paket
+                      </button>
+                      <button
+                        onClick={handleToggleTimerMode}
+                        className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border ${
+                          timerEnabled
+                            ? 'bg-rose-500/20 border-rose-400/40 text-rose-200'
+                            : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
+                        }`}
+                      >
+                        {timerEnabled ? `⏱️ ${formatTime(timeLeftSeconds)}` : '🌱 Mode Santai'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {isAdminUnlocked && (
+                        <button
+                          type="button"
+                          onClick={handleManualSyncAllToCloud}
+                          className={`px-3 py-2 rounded-xl text-xs font-extrabold border flex items-center gap-1.5 ${
+                            cloudSyncStatus === 'synced'
+                              ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
+                              : 'bg-amber-500/20 border-amber-400/40 text-amber-200'
+                          }`}
+                          title="Klik untuk sinkronkan paksa ke Cloud Firestore"
+                        >
+                          <span>{cloudSyncStatus === 'synced' ? '☁️ Cloud Sinkron' : '⚠️ Sync Cloud'}</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={handleOpenAdminButton}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-all flex items-center gap-1.5 ${
+                          isAdminUnlocked
+                            ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/30'
+                            : 'bg-white/10 border-white/20 text-indigo-100 hover:bg-white/20'
+                        }`}
+                      >
+                        <span>{isAdminUnlocked ? '🔓 Admin' : '🔒 Admin'}</span>
+                      </button>
+
+                      {isAdminUnlocked && (
+                        <button
+                          onClick={openUploadModalForCurrentFilter}
+                          className="px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 shadow-md hover:brightness-105"
+                        >
+                          + Upload PDF Kisi-Kisi
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </header>
+
+            {/* CLOUD FIRESTORE ERROR NOTICE (HANYA MUNCUL JIKA ADMIN AKTIF) */}
+            {isAdminUnlocked && cloudSyncErrorDetail && (
+              <div className="max-w-6xl mx-auto px-4 pt-4">
+                <div className="p-3.5 rounded-2xl bg-rose-950/80 border border-rose-400/40 text-rose-100 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <strong className="text-amber-300">⚠️ Info Cloud Firestore:</strong>{' '}
+                    <span>{cloudSyncErrorDetail}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleManualSyncAllToCloud}
+                    className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-extrabold shrink-0"
+                  >
+                    Coba Sync Ulang
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TOAST */}
+            {toastMessage && (
+              <div className="fixed bottom-16 right-5 z-50">
+                <div
+                  className={`px-4 py-3 rounded-2xl shadow-xl font-bold text-sm text-white border border-white/20 ${
+                    toastMessage.type === 'success'
+                      ? 'bg-emerald-600'
+                      : toastMessage.type === 'warning'
+                      ? 'bg-amber-600'
+                      : 'bg-indigo-600'
+                  }`}
+                >
+                  {toastMessage.msg}
+                </div>
+              </div>
+            )}
+
+            {/* ================================================================
+                VIEW 1: BERANDA BANK SOAL PER KELAS & SEMESTER
+               ================================================================ */}
+            {activeView === 'library' && (
+              <main className="max-w-6xl mx-auto px-4 pt-6 space-y-6">
+                {/* Banner Utama */}
+                <div className="bg-white/10 backdrop-blur-md rounded-3xl border border-white/15 shadow-xl p-6 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                  <div className="space-y-1.5">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-300/30 text-xs font-extrabold">
+                      ✨ Belajar Ceria Berbasis Kisi-Kisi Sekolah
+                    </span>
+                    <h2 className="text-xl sm:text-2xl font-extrabold text-white">
+                      Pilih Kelas & Semester untuk Mulai Latihan!
+                    </h2>
+                    <p className="text-sm text-indigo-100/90 max-w-2xl">
+                      {isAdminUnlocked
+                        ? 'Mode Admin aktif! Unggah file PDF Kisi-Kisi untuk Kelas 1 – 6 SD, otomatis tersinkron ke semua perangkat (PC & iPad).'
+                        : 'Pilih jenjang kelas dan semester di bawah ini untuk langsung mengerjakan latihan soal.'}
+                    </p>
+                  </div>
+
+                  {isAdminUnlocked && (
+                    <button
+                      onClick={openUploadModalForCurrentFilter}
+                      className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-extrabold text-sm shadow-lg hover:brightness-105"
+                    >
+                      📄 + Upload PDF Kisi-Kisi Baru
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Kelas 1-6 & Semester 1-2 */}
+                <div className="bg-white/10 backdrop-blur-md rounded-3xl border border-white/15 shadow-xl p-5 space-y-5">
+                  <div>
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200 block mb-2.5">
+                      1. Pilih Jenjang Kelas SD:
+                    </span>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+                      {[1, 2, 3, 4, 5, 6].map((gradeNum) => {
+                        const isActive = selectedGrade === gradeNum;
+                        const countInGrade = packages.filter(
+                          (p) => Number(p.grade) === gradeNum
+                        ).length;
+                        return (
+                          <button
+                            key={gradeNum}
+                            type="button"
+                            onClick={() => setSelectedGrade(gradeNum)}
+                            className={`py-3 px-3 rounded-2xl border font-extrabold text-sm transition-all flex flex-col items-center ${
+                              isActive
+                                ? 'bg-gradient-to-br from-amber-400 to-orange-500 border-amber-300 text-slate-950 shadow-lg scale-[1.02]'
+                                : 'bg-white/5 border-white/15 text-white hover:bg-white/15'
+                            }`}
+                          >
+                            <span>Kelas {gradeNum}</span>
+                            <span
+                              className={`text-[11px] font-bold ${
+                                isActive ? 'text-slate-900/80' : 'text-indigo-200/70'
+                              }`}
+                            >
+                              {countInGrade} Paket
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200 block mb-2">
+                        2. Pilih Semester:
+                      </span>
+                      <div className="inline-flex p-1.5 rounded-2xl bg-slate-950/40 border border-white/10">
+                        {[
+                          { val: 1, label: '📅 Semester 1 (Ganjil)' },
+                          { val: 2, label: '📅 Semester 2 (Genap)' }
+                        ].map((sem) => (
+                          <button
+                            key={sem.val}
+                            type="button"
+                            onClick={() => setSelectedSemester(sem.val)}
+                            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all ${
+                              selectedSemester === sem.val
+                                ? 'bg-indigo-600 text-white shadow-md'
+                                : 'text-indigo-200 hover:text-white'
+                            }`}
+                          >
+                            {sem.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="text-xs sm:text-sm font-bold text-amber-200 bg-amber-400/15 border border-amber-300/30 px-4 py-2.5 rounded-2xl">
+                      Menampilkan:{' '}
+                      <span className="text-white font-extrabold">
+                        Kelas {selectedGrade} SD • Semester {selectedSemester}
+                      </span>{' '}
+                      ({filteredPackages.length} Paket)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Daftar Kartu Paket Soal */}
+                {filteredPackages.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {filteredPackages.map((pkg) => {
+                      const pgCount = pkg.questions.filter((q) => q.type === 'pg').length;
+                      const essayCount = pkg.questions.filter((q) => q.type === 'essay').length;
+                      const hasVariation =
+                        Array.isArray(pkg.variationQuestions) && pkg.variationQuestions.length > 0;
+
+                      return (
+                        <div
+                          key={pkg.id}
+                          className="bg-white text-slate-800 rounded-3xl border-2 border-white/80 shadow-xl p-5 sm:p-6 flex flex-col justify-between gap-4"
+                        >
+                          <div>
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="px-3 py-1 rounded-xl bg-indigo-100 text-indigo-800 font-extrabold text-xs">
+                                  {pkg.subject}
+                                </span>
+                                <span className="px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 font-bold text-xs">
+                                  Kls {pkg.grade} • Sem {pkg.semester}
+                                </span>
+                                {hasVariation && (
+                                  <span className="px-2.5 py-1 rounded-xl bg-purple-100 text-purple-800 font-extrabold text-xs">
+                                    ✨ 2 Set Soal
+                                  </span>
+                                )}
+                              </div>
+
+                              {pkg.bestScore !== null && pkg.bestScore !== undefined ? (
+                                <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-extrabold text-xs border border-amber-200">
+                                  🏆 Skor Terbaik: {pkg.bestScore}
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold text-xs">
+                                  Belum Dikerjakan
+                                </span>
+                              )}
+                            </div>
+
+                            <h3 className="text-lg font-extrabold text-slate-900 mb-2 leading-snug">
+                              {pkg.title}
+                            </h3>
+
+                            {pkg.sourcePdfName && (
+                              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 mb-3 max-w-full">
+                                <span>📄</span>
+                                <span className="truncate">Sumber: {pkg.sourcePdfName}</span>
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-2.5 text-xs font-bold text-slate-600">
+                              <span className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800">
+                                {pgCount} Pilihan Ganda
+                              </span>
+                              <span className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800">
+                                {essayCount} Esai
+                              </span>
+                              <span className="text-slate-400">Total {pkg.questions.length} Soal</span>
+                            </div>
+                          </div>
+
+                          <div className="pt-4 border-t border-slate-100 flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => handleClickMulaiLatihan(pkg)}
+                              className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-md flex items-center justify-center gap-2"
+                            >
+                              <span>▶️ Mulai Latihan</span>
+                            </button>
+
+                            {isAdminUnlocked && !pkg.isBuiltin && (
+                              <button
+                                type="button"
+                                onClick={() => setPackageToDelete(pkg)}
+                                className="p-3 rounded-2xl border-2 border-rose-100 text-rose-600 hover:bg-rose-50"
+                                title="Hapus Paket Soal (Admin)"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-white/10 backdrop-blur-md rounded-3xl border border-dashed border-white/25 p-10 text-center space-y-4">
+                    <div className="text-4xl">📂</div>
+                    <h3 className="text-lg font-extrabold text-white">
+                      Belum Ada Paket Soal untuk Kelas {selectedGrade} • Semester {selectedSemester}
+                    </h3>
+                    <p className="text-sm text-indigo-200 max-w-md mx-auto">
+                      {isAdminUnlocked
+                        ? `Klik tombol di bawah untuk mengunggah PDF kisi-kisi Kelas ${selectedGrade} Semester ${selectedSemester}.`
+                        : 'Paket soal untuk kelas & semester ini belum ditambahkan oleh Admin.'}
+                    </p>
+                    {isAdminUnlocked && (
+                      <button
+                        type="button"
+                        onClick={openUploadModalForCurrentFilter}
+                        className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-extrabold text-sm shadow-md"
+                      >
+                        📄 Upload PDF Kisi-Kisi Sekarang
+                      </button>
+                    )}
+                  </div>
+                )}
+              </main>
+            )}
+
+            {/* ================================================================
+                VIEW 2: MODE LATIHAN SOAL (QUIZ)
+               ================================================================ */}
+            {activeView === 'quiz' && currentQuestion && (
+              <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-6">
+                <div className="bg-white/10 rounded-xl sm:rounded-2xl px-3.5 py-2.5 sm:p-4 mb-3 sm:mb-6 border border-white/15 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-lg sm:rounded-xl bg-amber-400 text-slate-950 font-extrabold text-xs sm:text-sm">
+                      Soal {currentIdx + 1} / {activePackage.questions.length}
+                    </span>
+                    <span className="text-xs sm:text-sm font-semibold text-indigo-100">
+                      Terjawab: <strong className="text-amber-300">{answeredCount}</strong> /{' '}
+                      {activePackage.questions.length}
+                    </span>
+                  </div>
+                  <div className="w-24 sm:w-64 h-2.5 sm:h-3 bg-white/15 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-300 rounded-full"
+                      style={{
+                        width: `${Math.round((answeredCount / activePackage.questions.length) * 100)}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
+                  <div className="lg:col-span-8 bg-white text-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl p-3.5 sm:p-8">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2.5 sm:mb-5">
+                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-lg sm:rounded-xl bg-indigo-600 text-white font-extrabold text-xs sm:text-sm">
+                        No. {currentIdx + 1}
+                      </span>
+                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-lg sm:rounded-xl bg-sky-50 text-sky-700 border border-sky-200 font-bold text-[11px] sm:text-sm">
+                        {currentQuestion.type === 'pg' ? 'Pilihan Ganda' : 'Esai / Isian'}
+                      </span>
+                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-lg sm:rounded-xl bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[11px] sm:text-sm truncate max-w-[180px] sm:max-w-none">
+                        📚 {currentQuestion.unit}
+                      </span>
+                    </div>
+
+                    {(currentQuestion.visualEmoji || currentQuestion.visualCaption) && (
+                      <div className="mb-3 sm:mb-6 rounded-xl sm:rounded-2xl bg-sky-50 border border-dashed border-sky-200 px-3 py-2 sm:p-5 flex flex-row items-center gap-2.5 sm:gap-4">
+                        {currentQuestion.visualEmoji && (
+                          <div className="text-2xl sm:text-5xl bg-white px-2.5 py-1.5 sm:px-5 sm:py-3.5 rounded-xl sm:rounded-2xl shadow-sm shrink-0">
+                            {currentQuestion.visualEmoji}
+                          </div>
+                        )}
+                        {currentQuestion.visualCaption && (
+                          <div className="text-left min-w-0">
+                            <span className="text-[10px] sm:text-[11px] font-extrabold uppercase text-sky-600 block">
+                              Ilustrasi Gambar
+                            </span>
+                            <p className="text-xs sm:text-base font-medium text-slate-700 leading-snug">
+                              {currentQuestion.visualCaption}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <p className="text-base sm:text-xl font-bold text-slate-800 leading-snug sm:leading-relaxed whitespace-pre-line mb-3.5 sm:mb-7">
+                      {currentQuestion.question}
+                    </p>
+
+                    {currentQuestion.type === 'pg' ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3.5 mb-4 sm:mb-8">
+                        {currentQuestion.options.map((opt) => {
+                          const isSelected = answers[currentQuestion.id] === opt.key;
+                          return (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() =>
+                                setAnswers((prev) => ({ ...prev, [currentQuestion.id]: opt.key }))
+                              }
+                              className={`px-3 py-2.5 sm:p-4 rounded-xl sm:rounded-2xl border-2 text-left transition-all flex items-center gap-2.5 sm:gap-3.5 ${
+                                isSelected
+                                  ? 'bg-indigo-50 border-indigo-600 shadow-sm'
+                                  : 'bg-white border-slate-200 hover:border-sky-400'
+                              }`}
+                            >
+                              <span
+                                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl font-extrabold text-sm sm:text-base flex items-center justify-center shrink-0 ${
+                                  isSelected
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {opt.key}
+                              </span>
+                              <span className="text-sm sm:text-lg font-bold text-slate-800 leading-tight">
+                                {opt.text}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mb-4 sm:mb-8">
+                        <label className="block text-xs sm:text-sm font-bold text-slate-600 mb-1.5 sm:mb-2">
+                          ✏️ Ketik jawabanmu di kotak bawah ini:
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={answers[currentQuestion.id] || ''}
+                          onChange={(e) =>
+                            setAnswers((prev) => ({ ...prev, [currentQuestion.id]: e.target.value }))
+                          }
+                          placeholder="Tulis jawabanmu di sini..."
+                          className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-purple-200 focus:border-purple-500 outline-none text-sm sm:text-lg font-bold text-slate-800 bg-purple-50/20"
+                        />
+                      </div>
+                    )}
+
+                    <div className="pt-3 sm:pt-5 border-t border-slate-100 flex items-center justify-between gap-2 sm:gap-3">
+                      <button
+                        type="button"
+                        disabled={currentIdx === 0}
+                        onClick={() => setCurrentIdx((p) => Math.max(0, p - 1))}
+                        className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 border-slate-200 text-slate-700 disabled:opacity-40 whitespace-nowrap"
+                      >
+                        <span className="sm:hidden">← Kembali</span>
+                        <span className="hidden sm:inline">← Sebelumnya</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUnsureFlags((prev) => ({
+                            ...prev,
+                            [currentQuestion.id]: !prev[currentQuestion.id]
+                          }))
+                        }
+                        className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 whitespace-nowrap ${
+                          unsureFlags[currentQuestion.id]
+                            ? 'bg-amber-400 border-amber-500 text-slate-900'
+                            : 'bg-amber-50 border-amber-300 text-amber-800'
+                        }`}
+                      >
+                        ❓ Ragu-ragu
+                      </button>
+
+                      {currentIdx < activePackage.questions.length - 1 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCurrentIdx((p) => Math.min(activePackage.questions.length - 1, p + 1))
+                          }
+                          className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-indigo-600 text-white shadow-sm whitespace-nowrap"
+                        >
+                          Selanjutnya →
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openModalWithHistory(setShowSubmitConfirm)}
+                          className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl font-extrabold text-xs sm:text-sm bg-emerald-600 text-white shadow-md whitespace-nowrap"
+                        >
+                          ✅ Kumpulkan
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Navigasi Nomor */}
+                  <aside className="lg:col-span-4 bg-white text-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 sticky top-24">
+                    <div className="flex items-center justify-between mb-3 sm:mb-4">
+                      <h2 className="font-extrabold text-sm sm:text-base text-slate-800">
+                        Navigasi Nomor Soal
+                      </h2>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600">
+                        {activePackage.questions.length} Soal
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-2 sm:gap-2.5 mb-4 sm:mb-5">
+                      {activePackage.questions.map((q, idx) => {
+                        const isCurrent = idx === currentIdx;
+                        const isAnswered = Boolean(answers[q.id] && answers[q.id].trim().length > 0);
+                        const isUnsure = Boolean(unsureFlags[q.id]);
+
+                        let btnStyle = 'bg-slate-50 border-slate-200 text-slate-600';
+                        if (isUnsure) btnStyle = 'bg-amber-400 border-amber-500 text-slate-900';
+                        else if (isAnswered) btnStyle = 'bg-indigo-600 border-indigo-600 text-white';
+
+                        return (
+                          <button
+                            key={q.id}
+                            type="button"
+                            onClick={() => setCurrentIdx(idx)}
+                            className={`h-9 sm:h-11 rounded-lg sm:rounded-xl font-extrabold text-xs sm:text-sm border-2 transition-all ${btnStyle} ${
+                              isCurrent ? 'ring-4 ring-amber-300 scale-105' : ''
+                            }`}
+                          >
+                            {idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openModalWithHistory(setShowSubmitConfirm)}
+                      className="w-full py-3 sm:py-3.5 px-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-sm sm:text-base shadow-md"
+                    >
+                      ✅ Kumpulkan & Cek Nilai
+                    </button>
+                  </aside>
+                </div>
+              </main>
+            )}
+
+            {/* ================================================================
+                VIEW 3: HASIL & PEMBAHASAN
+               ================================================================ */}
+            {activeView === 'results' && gradingResults && (
+              <main className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
+                <div className="bg-white text-slate-800 rounded-3xl border-2 border-amber-300 shadow-2xl p-6 sm:p-8 text-center">
+                  <div className="text-4xl mb-2">🏆</div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                    {gradingResults.finalScore >= 75
+                      ? 'Hebat Sekali! Kamu Bintang Juara Kelas Hari Ini! ✨'
+                      : 'Tetap Semangat! Yuk Pelajari Pembahasannya Bersama! 📚'}
+                  </h2>
+                  <p className="text-xs sm:text-sm font-bold text-slate-500 mt-1">
+                    {activePackage.title} • Waktu: {elapsedDurationText}
+                  </p>
+
+                  <div className="my-5 inline-flex flex-wrap items-center justify-center gap-6 bg-indigo-50 border border-indigo-100 px-8 py-4 rounded-3xl">
+                    <div>
+                      <span className="text-xs font-extrabold uppercase text-slate-500 block">
+                        Nilai Akhir
+                      </span>
+                      <span className="text-4xl sm:text-5xl font-black text-indigo-600">
+                        {gradingResults.finalScore}
+                      </span>
+                      <span className="text-sm font-bold text-slate-400"> / 100</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-extrabold uppercase text-slate-500 block">
+                        Jawaban Benar
+                      </span>
+                      <span className="text-2xl sm:text-3xl font-black text-emerald-600">
+                        {gradingResults.correctCount} / {gradingResults.totalQuestions}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-extrabold uppercase text-slate-500 block">
+                        Bonus XP
+                      </span>
+                      <span className="text-2xl sm:text-3xl font-black text-amber-500">
+                        +{gradingResults.earnedStars} ⭐
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => startQuizWithQuestions(activePackage, activePackage.questions, '', openedFromChoiceModal)}
+                      className="px-6 py-3 rounded-2xl bg-indigo-600 text-white font-extrabold text-sm shadow-md"
+                    >
+                      🔄 Ulangi Paket Ini
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigateToView('library')}
+                      className="px-6 py-3 rounded-2xl bg-slate-100 text-slate-800 font-extrabold text-sm"
+                    >
+                      📂 Kembali ke Daftar Kelas
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {gradingResults.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`bg-white text-slate-800 rounded-3xl border-2 p-5 sm:p-6 shadow-lg ${
+                        item.isCorrect ? 'border-emerald-300' : 'border-rose-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="px-3 py-1 rounded-xl bg-slate-800 text-white font-extrabold text-xs">
+                          Soal No. {item.number}
+                        </span>
+                        <span
+                          className={`px-3 py-1 rounded-full font-extrabold text-xs ${
+                            item.isCorrect
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {item.isCorrect ? `✅ Benar (+${item.score})` : `❌ Perlu Diperbaiki (${item.score})`}
+                        </span>
+                      </div>
+
+                      <p className="text-base sm:text-lg font-bold text-slate-800 mb-3 whitespace-pre-line">
+                        {item.question}
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                          <span className="text-xs font-extrabold text-slate-500 block">
+                            Jawaban Kamu:
+                          </span>
+                          <p className="font-bold text-sm">{item.userAnswerDisplay}</p>
+                        </div>
+                        <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200">
+                          <span className="text-xs font-extrabold text-sky-700 block">
+                            Kunci Jawaban:
+                          </span>
+                          <p className="font-bold text-sm text-sky-950">
+                            {item.correctAnswerDisplay}
+                          </p>
+                        </div>
+                      </div>
+
+                      {item.aiFeedback && (
+                        <div className="mb-3 p-3 rounded-2xl bg-purple-50 border border-purple-200 text-xs sm:text-sm font-semibold text-purple-900">
+                          ✨ <strong>Catatan Guru AI:</strong> {item.aiFeedback}
+                        </div>
+                      )}
+
+                      <div className="mb-2.5 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs sm:text-sm text-emerald-950 whitespace-pre-line">
+                        <strong>💡 Pembahasan:</strong>
+                        {'\n'}
+                        {item.explanation}
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs sm:text-sm text-amber-950">
+                        <strong>⚠️ Awas Jebakan:</strong> {item.trapWarning}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </main>
+            )}
+
+            {/* ================================================================
+                MODAL PILIHAN VERSI LATIHAN (SOAL LAMA vs SOAL BARU)
+               ================================================================ */}
+            {packageChoiceModal && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 border-2 border-indigo-200 shadow-2xl space-y-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 text-xs font-extrabold">
+                        Pilih Versi Latihan Soal
+                      </span>
+                      <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 mt-2 leading-snug">
+                        {packageChoiceModal.title}
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isGeneratingVariation}
+                      onClick={() => setPackageChoiceModal(null)}
+                      className="text-slate-400 hover:text-slate-700 font-extrabold text-xl"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {savedQuizSessionRef.current &&
+                    savedQuizSessionRef.current.pkgId === packageChoiceModal.id &&
+                    Date.now() - savedQuizSessionRef.current.savedAt <= 30 * 1000 && (
+                      <button
+                        type="button"
+                        onClick={handleResumeSavedSession}
+                        className="w-full p-3.5 rounded-2xl bg-amber-400 hover:bg-amber-500 text-slate-950 font-extrabold text-sm shadow-md flex items-center justify-between gap-3 border-2 border-amber-500"
+                      >
+                        <div className="text-left">
+                          <span className="block">↩️ Lanjutkan Soal Tadi (No. {(savedQuizSessionRef.current.currentIdx || 0) + 1})</span>
+                          <span className="text-[11px] font-bold text-slate-800">
+                            Jawaban sementara disimpan selama 30 detik
+                          </span>
+                        </div>
+                        <span className="text-lg">▶</span>
+                      </button>
+                    )}
+
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      disabled={isGeneratingVariation}
+                      onClick={() =>
+                        startQuizWithQuestions(
+                          packageChoiceModal,
+                          packageChoiceModal.questions,
+                          'Soal Lama (Set Utama)',
+                          true
+                        )
+                      }
+                      className="w-full p-4 rounded-2xl border-2 border-sky-200 bg-sky-50/70 hover:bg-sky-100/80 text-left transition-all flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <span className="font-extrabold text-base text-slate-900 block">
+                          📘 Soal Lama (Set Utama)
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600">
+                          Ulangi set soal pertama ({packageChoiceModal.questions.length} soal)
+                        </span>
+                      </div>
+                      <span className="px-3 py-1.5 rounded-xl bg-sky-600 text-white text-xs font-extrabold shrink-0">
+                        Mulai →
+                      </span>
+                    </button>
+
+                    {Array.isArray(packageChoiceModal.variationQuestions) &&
+                    packageChoiceModal.variationQuestions.length > 0 ? (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          disabled={isGeneratingVariation}
+                          onClick={() =>
+                            startQuizWithQuestions(
+                              packageChoiceModal,
+                              packageChoiceModal.variationQuestions,
+                              'Soal Baru (Variasi)',
+                              true
+                            )
+                          }
+                          className="w-full p-4 rounded-2xl border-2 border-purple-200 bg-purple-50/70 hover:bg-purple-100/80 text-left transition-all flex items-center justify-between gap-3"
+                        >
+                          <div>
+                            <span className="font-extrabold text-base text-slate-900 block">
+                              ✨ Soal Baru (Variasi AI)
+                            </span>
+                            <span className="text-xs font-semibold text-slate-600">
+                              Soal dengan cerita & angka baru ({packageChoiceModal.variationQuestions.length} soal)
+                            </span>
+                          </div>
+                          <span className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-extrabold shrink-0">
+                            Mulai →
+                          </span>
+                        </button>
+
+                        {isAdminUnlocked && (
+                          <button
+                            type="button"
+                            disabled={isGeneratingVariation}
+                            onClick={() => handleGenerateVariationInsidePackage(packageChoiceModal)}
+                            className="w-full py-2 text-xs font-extrabold text-indigo-600 hover:underline text-center"
+                          >
+                            {isGeneratingVariation
+                              ? '⏳ Sedang meracik variasi soal baru...'
+                              : '🔄 Perbarui / Buat Ulang Set Soal Baru (Admin)'}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      isAdminUnlocked && (
+                        <button
+                          type="button"
+                          disabled={isGeneratingVariation}
+                          onClick={() => handleGenerateVariationInsidePackage(packageChoiceModal)}
+                          className="w-full p-4 rounded-2xl border-2 border-purple-300 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-left transition-all flex items-center justify-between gap-3 shadow-md"
+                        >
+                          <div>
+                            <span className="font-extrabold text-base block">
+                              {isGeneratingVariation
+                                ? '⏳ Meracik Soal Baru...'
+                                : '✨ Buat & Mulai Soal Baru (AI Remix)'}
+                            </span>
+                            <span className="text-xs font-semibold text-indigo-100">
+                              Generate variasi soal segar dari kisi-kisi yang sama (Admin)
+                            </span>
+                          </div>
+                          <span className="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 text-xs font-extrabold shrink-0">
+                            {isGeneratingVariation ? 'Proses...' : 'Buat ✨'}
+                          </span>
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================================
+                MODAL LOGIN ADMIN
+               ================================================================ */}
+            {showAdminLoginModal && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-indigo-100 shadow-2xl space-y-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-xl font-extrabold text-slate-900">
+                        {showResetPwdMode ? '🔑 Reset Password Admin' : '🔒 Masuk Mode Admin'}
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {showResetPwdMode
+                          ? 'Gunakan kode pemulihan master untuk membuat password baru.'
+                          : 'Masukkan password Admin untuk mengelola bank soal & pengaturan.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminLoginModal(false)}
+                      className="text-slate-400 hover:text-slate-700 font-extrabold text-lg"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {loginErrorMsg && (
+                    <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                      ⚠️ {loginErrorMsg}
+                    </div>
+                  )}
+
+                  {!showResetPwdMode ? (
+                    <form onSubmit={handleSubmitAdminLogin} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1.5">
+                          Password Admin
+                        </label>
+                        <input
+                          type="password"
+                          autoFocus
+                          value={loginPasswordInput}
+                          onChange={(e) => setLoginPasswordInput(e.target.value)}
+                          placeholder="Masukkan password..."
+                          className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowResetPwdMode(true);
+                            setLoginErrorMsg('');
+                          }}
+                          className="text-xs font-bold text-indigo-600 hover:underline"
+                        >
+                          Lupa password? Reset di sini
+                        </button>
+                      </div>
+
+                      <div className="flex justify-end gap-2.5 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminLoginModal(false)}
+                          className="px-4 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-600"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-extrabold text-sm shadow-md"
+                        >
+                          Buka Mode Admin
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleResetPasswordWithRecovery} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1.5">
+                          Kode Pemulihan Master
+                        </label>
+                        <input
+                          type="text"
+                          value={recoveryCodeInput}
+                          onChange={(e) => setRecoveryCodeInput(e.target.value)}
+                          placeholder="Masukkan kode pemulihan..."
+                          className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1.5">
+                          Password Admin Baru
+                        </label>
+                        <input
+                          type="password"
+                          value={resetNewPwdInput}
+                          onChange={(e) => setResetNewPwdInput(e.target.value)}
+                          placeholder="Minimal 4 karakter"
+                          className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold"
+                          required
+                        />
+                      </div>
+                      <div className="flex justify-between items-center pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowResetPwdMode(false);
+                            setLoginErrorMsg('');
+                          }}
+                          className="text-xs font-bold text-slate-500 hover:underline"
+                        >
+                          ← Kembali ke Login
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-extrabold text-sm shadow-md"
+                        >
+                          Simpan Password Baru
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ================================================================
+                MODAL PENGATURAN ADMIN (API KEY & GANTI PASSWORD)
+               ================================================================ */}
+            {showSettingsModal && isAdminUnlocked && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 border-2 border-indigo-100 shadow-2xl space-y-5 my-auto">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-xl font-extrabold text-slate-900">
+                        🔓 Pengaturan Mode Admin
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Atur Gemini API Key dan ubah password keamanan Admin.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSettingsModal(false)}
+                      className="text-slate-400 hover:text-slate-700 font-extrabold text-lg"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {pwdChangeMessage && (
+                    <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                      ⚠️ {pwdChangeMessage.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSaveSettings} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1.5">
+                        Gemini API Key (Google AI Studio)
+                      </label>
+                      <input
+                        type="password"
+                        value={tempApiKeyInput}
+                        onChange={(e) => setTempApiKeyInput(e.target.value)}
+                        placeholder="AIzaSy..."
+                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold"
+                      />
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 space-y-3">
+                      <span className="text-xs font-extrabold uppercase text-indigo-700 block">
+                        Ganti Password Admin (Opsional)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input
+                          type="password"
+                          value={newAdminPwdInput}
+                          onChange={(e) => setNewAdminPwdInput(e.target.value)}
+                          placeholder="Password baru..."
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold"
+                        />
+                        <input
+                          type="password"
+                          value={confirmAdminPwdInput}
+                          onChange={(e) => setConfirmAdminPwdInput(e.target.value)}
+                          placeholder="Ulangi password baru..."
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 text-sm font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={handleLockAdmin}
+                        className="px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-extrabold text-xs hover:bg-rose-100"
+                      >
+                        🔒 Kunci Mode Admin
+                      </button>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowSettingsModal(false)}
+                          className="px-4 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-600"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-extrabold text-sm shadow-md"
+                        >
+                          Simpan Pengaturan
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================================
+                MODAL UPLOAD PDF KISI-KISI & GENERATOR SOAL (KHUSUS ADMIN)
+               ================================================================ */}
+            {showUploadModal && isAdminUnlocked && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-3xl w-full p-5 sm:p-8 border-2 border-indigo-100 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
+                  <div className="flex items-start justify-between gap-4 pb-4 mb-5 border-b border-slate-100">
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                        📄 Upload PDF Kisi-Kisi & Buat Soal AI
+                      </h2>
+                      <p className="text-xs sm:text-sm text-slate-500">
+                        Otomatis tersimpan ke perangkat ini & Cloud Firestore iPad.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => !isGenerating && setShowUploadModal(false)}
+                      className="p-2 text-slate-400 hover:text-slate-700 font-extrabold text-lg"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {generatorError && (
+                    <div className="mb-4 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm font-semibold">
+                      ⚠️ {generatorError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleGenerateAndSavePackage} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                          Simpan ke Kelas
+                        </label>
+                        <select
+                          value={genGrade}
+                          onChange={(e) => setGenGrade(Number(e.target.value))}
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                        >
+                          {[1, 2, 3, 4, 5, 6].map((g) => (
+                            <option key={g} value={g}>
+                              Kelas {g} SD
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                          Simpan ke Semester
+                        </label>
+                        <select
+                          value={genSemester}
+                          onChange={(e) => setGenSemester(Number(e.target.value))}
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                        >
+                          <option value={1}>Semester 1 (Ganjil)</option>
+                          <option value={2}>Semester 2 (Genap)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                          Mata Pelajaran
+                        </label>
+                        <input
+                          type="text"
+                          value={genSubject}
+                          onChange={(e) => setGenSubject(e.target.value)}
+                          placeholder="Contoh: Matematika, IPAS, Bahasa Inggris"
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                          Judul Paket Latihan
+                        </label>
+                        <input
+                          type="text"
+                          value={genTitle}
+                          onChange={(e) => setGenTitle(e.target.value)}
+                          placeholder="Contoh: Latihan ASAS Bab 1 - 4"
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                          Jumlah Pilihan Ganda
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={genPgCount}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            setGenPgCount(digitsOnly);
+                          }}
+                          onBlur={() => {
+                            const num = parseInt(genPgCount, 10);
+                            if (isNaN(num) || num < 1) setGenPgCount('1');
+                            else if (num > 20) setGenPgCount('20');
+                            else setGenPgCount(String(num));
+                          }}
+                          placeholder="1 - 20"
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-extrabold text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
+                          Jumlah Soal Esai
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={genEssayCount}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '');
+                            setGenEssayCount(digitsOnly);
+                          }}
+                          onBlur={() => {
+                            const num = parseInt(genEssayCount, 10);
+                            if (isNaN(num) || num < 0) setGenEssayCount('0');
+                            else if (num > 15) setGenEssayCount('15');
+                            else setGenEssayCount(String(num));
+                          }}
+                          placeholder="0 - 15"
+                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-extrabold text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-extrabold uppercase text-slate-600">
+                          Sumber Kisi-Kisi:
+                        </span>
+                        <div className="inline-flex p-1 rounded-xl bg-slate-100 text-xs font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setInputMode('pdf')}
+                            className={`px-3 py-1 rounded-lg ${
+                              inputMode === 'pdf' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
+                            }`}
+                          >
+                            Upload PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInputMode('manual')}
+                            className={`px-3 py-1 rounded-lg ${
+                              inputMode === 'manual' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
+                            }`}
+                          >
+                            Tempel Teks
+                          </button>
+                        </div>
+                      </div>
+
+                      {inputMode === 'pdf' ? (
+                        <div className="space-y-3">
+                          <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className="border-2 border-dashed border-indigo-300 bg-indigo-50/40 rounded-2xl p-6 text-center cursor-pointer"
+                          >
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept=".pdf,application/pdf"
+                              onChange={(e) => handlePdfFileSelected(e.target.files?.[0])}
+                              className="hidden"
+                            />
+                            {isExtractingPdf ? (
+                              <div className="font-extrabold text-sm text-indigo-700">
+                                ⏳ Membaca dokumen PDF...
+                              </div>
+                            ) : uploadedPdfName ? (
+                              <div>
+                                <p className="font-extrabold text-sm text-slate-900">
+                                  📄 {uploadedPdfName}
+                                </p>
+                                <span className="text-xs font-bold text-emerald-700">
+                                  ✓ {uploadedPdfPages} Halaman Berhasil Diekstrak
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="font-extrabold text-sm text-slate-800">
+                                  Klik untuk pilih file PDF Kisi-Kisi
+                                </p>
+                                <p className="text-xs text-slate-500">Format file .pdf</p>
+                              </div>
+                            )}
+                          </div>
+                          {kisiKisiText && (
+                            <textarea
+                              rows={4}
+                              value={kisiKisiText}
+                              onChange={(e) => setKisiKisiText(e.target.value)}
+                              className="w-full p-3 rounded-xl border border-slate-200 text-xs bg-slate-50"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <textarea
+                          rows={5}
+                          value={kisiKisiText}
+                          onChange={(e) => setKisiKisiText(e.target.value)}
+                          placeholder="Tempelkan teks kisi-kisi di sini..."
+                          className="w-full p-3.5 rounded-2xl border-2 border-slate-200 text-xs sm:text-sm"
+                        />
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
+                      <button
+                        type="button"
+                        disabled={isGenerating}
+                        onClick={() => setShowUploadModal(false)}
+                        className="px-5 py-3 rounded-2xl border-2 border-slate-200 font-bold text-sm text-slate-600"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isGenerating || isExtractingPdf}
+                        className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-sm shadow-lg"
+                      >
+                        {isGenerating ? '⏳ Meracik Soal...' : '✨ Generate & Simpan Soal'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL KONFIRMASI HAPUS */}
+            {packageToDelete && isAdminUnlocked && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 border-2 border-rose-100 shadow-2xl text-center">
+                  <h3 className="text-lg font-extrabold text-slate-900 mb-2">Hapus Paket Soal Ini?</h3>
+                  <p className="text-sm text-slate-600 mb-5">
+                    Paket <strong>"{packageToDelete.title}"</strong> akan dihapus dari Kelas{' '}
+                    {packageToDelete.grade} Semester {packageToDelete.semester}.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPackageToDelete(null)}
+                      className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmDeletePackage}
+                      className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-extrabold text-sm"
+                    >
+                      Ya, Hapus
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL KONFIRMASI KUMPULKAN */}
+            {showSubmitConfirm && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-sky-100 shadow-2xl text-center">
+                  <div className="text-4xl mb-3">✅</div>
+                  <h3 className="text-xl font-extrabold text-slate-900 mb-2">
+                    Sudah Yakin Ingin Mengumpulkan?
+                  </h3>
+                  <p className="text-sm text-slate-600 mb-5 leading-relaxed">
+                    Kamu sudah menjawab <strong>{answeredCount}</strong> dari{' '}
+                    <strong>{activePackage.questions.length}</strong> soal
+                    {unsureCount > 0 ? ` (masih ada ${unsureCount} soal ditandai ragu-ragu)` : ''}.
+                    Yuk cek hasilnya sekarang!
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSubmitConfirm(false)}
+                      className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700 hover:bg-slate-100"
+                    >
+                      Cek Lagi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleFinalizeAndGradeExam}
+                      className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-md"
+                    >
+                      Ya, Kumpulkan!
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* LOADING OVERLAY SAAT MENGOREKSI */}
+            {isGrading && (
+              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-white text-slate-800 rounded-3xl max-w-sm w-full p-7 border-2 border-indigo-100 shadow-2xl text-center">
+                  <div className="text-4xl animate-spin mb-4">⏳</div>
+                  <h3 className="text-lg font-extrabold text-slate-900 mb-1.5">
+                    Sebentar Ya, Sedang Mengoreksi...
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    Kakak AI sedang memeriksa jawaban Pilihan Ganda dan Esaimu dengan teliti! ✨
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <footer className="py-5 px-4 text-center text-xs font-bold text-indigo-200/75 border-t border-white/10 bg-[#12132e]/80 backdrop-blur-md">
+            ©Tommydomeh 2026
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
