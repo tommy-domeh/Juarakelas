@@ -353,9 +353,9 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
     // =========================================================================
     async function fetchGeminiWithRetry(apiKey, payload, maxRetries = 2) {
       const candidateModels = [
+        'gemini-3.8-flash',
         'gemini-3-flash-preview',
-        'gemini-2.5-flash-preview-09-2025',
-        'gemini-2.0-flash'
+        'gemini-2.5-flash'
       ];
 
       let lastError = null;
