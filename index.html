@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Juara Kelas - Bank Soal & Kisi-Kisi Pintar</title>
+  <!-- Preconnect ke CDN & API untuk mempercepat loading awal di PC/Mobile -->
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin />
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts -->
@@ -11,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <!-- PDF.js untuk membaca file PDF Kisi-Kisi -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
   <!-- Firebase Compat SDK untuk sinkronisasi cloud antar PC & iPad -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -349,46 +354,49 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
     }
 
     // =========================================================================
-    // HELPER: CALL GEMINI API DENGAN AUTO-FALLBACK MODEL TERBARU
+    // HELPER: CALL GEMINI API DENGAN AUTO-FALLBACK MODEL TERCEPAT
     // =========================================================================
     async function fetchGeminiWithRetry(apiKey, payload, maxRetries = 2) {
       const candidateModels = [
-        'gemini-3.8-flash',
-        'gemini-3-flash-preview',
-        'gemini-2.5-flash'
+        'gemini-2.5-flash',
+        'gemini-3-flash-preview'
       ];
 
       let lastError = null;
 
       for (const modelName of candidateModels) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-        let delay = 1000;
+        let delay = 800;
+
+        const tunedPayload = modelName.startsWith('gemini-2.5')
+          ? {
+              ...payload,
+              generationConfig: {
+                ...(payload.generationConfig || {}),
+                thinkingConfig: { thinkingBudget: 0 }
+              }
+            }
+          : payload;
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
           try {
             const response = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
+              body: JSON.stringify(tunedPayload)
             });
 
             if (!response.ok) {
-              const errData = await response.json().catch(() => ({}));
-              const errMsg = errData?.error?.message || `HTTP ${response.status}`;
-
-              if (
-                response.status === 404 ||
-                errMsg.toLowerCase().includes('no longer available') ||
-                errMsg.toLowerCase().includes('not found') ||
-                errMsg.toLowerCase().includes('not supported')
-              ) {
-                lastError = new Error(errMsg);
+              if (response.status === 404 || response.status === 400) {
+                const errJson = await response.json().catch(() => ({}));
+                lastError = new Error(errJson?.error?.message || `Model ${modelName} tidak tersedia (${response.status})`);
                 break;
               }
-
               if (response.status === 429 || response.status >= 500) {
-                throw new Error(errMsg);
+                throw new Error(`HTTP ${response.status}`);
               }
+              const errJson = await response.json().catch(() => ({}));
+              const errMsg = errJson?.error?.message || `API Error (${response.status})`;
               throw new Error(errMsg);
             }
 
@@ -402,91 +410,56 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         }
       }
 
-      throw lastError || new Error('Gagal menghubungi Gemini AI.');
+      throw lastError || new Error('Gagal menghubungi server Gemini.');
     }
 
     // =========================================================================
-    // MAIN APPLICATION
+    // MAIN APP COMPONENT
     // =========================================================================
     function App() {
-      const STORAGE_PACKAGES_KEY = 'juarakelas_packages_v1';
-      const STORAGE_XP_KEY = 'juarakelas_xp_v1';
-      const STORAGE_APIKEY_KEY = 'juarakelas_gemini_apikey_v1';
-      const STORAGE_ADMIN_PIN_KEY = 'juarakelas_admin_pin_v1';
-      const ADMIN_RECOVERY_CODE = 'TOMMY2026';
-
       const [activeView, setActiveView] = useState('library');
-      const isHandlingPopStateRef = useRef(false);
-      const lastPopStateTimeRef = useRef(0);
-      const savedQuizSessionRef = useRef(null);
-      const savedSessionTimerRef = useRef(null);
-      const [hasSavedSession, setHasSavedSession] = useState(false);
+      const [xpStars, setXpStars] = useState(() => Number(localStorage.getItem('jk_xp') || 150));
 
-      const clearSavedQuizSession = () => {
-        savedQuizSessionRef.current = null;
-        setHasSavedSession(false);
-        if (savedSessionTimerRef.current) {
-          clearTimeout(savedSessionTimerRef.current);
-          savedSessionTimerRef.current = null;
-        }
-      };
-
-      const triggerToast = (msg, type = 'info') => {
-        setToastMessage({ msg, type });
-        setTimeout(() => {
-          setToastMessage(null);
-        }, 3800);
-      };
-
-      const navigateToView = (targetView) => {
-        setActiveView(targetView);
-        if (!isHandlingPopStateRef.current) {
-          window.history.pushState({ juarakelas: true, view: targetView }, '');
-        }
-      };
-
-      const openModalWithHistory = (setterFn, value) => {
-        setterFn(value);
-        if (!isHandlingPopStateRef.current) {
-          window.history.pushState({ juarakelas: true, modal: true }, '');
-        }
-      };
-
-      const goToQuestionIndex = (nextIdx) => {
-        const clamped = Math.min(activePackage.questions.length - 1, Math.max(0, nextIdx));
-        setCurrentIdx(clamped);
-      };
-
-      const [xpStars, setXpStars] = useState(() => {
-        const saved = localStorage.getItem(STORAGE_XP_KEY);
-        return saved ? Number(saved) : 150;
-      });
-
-      const [geminiApiKey, setGeminiApiKey] = useState(() => {
-        return localStorage.getItem(STORAGE_APIKEY_KEY) || '';
-      });
-      const [tempApiKey, setTempApiKey] = useState('');
-
-      // State Admin & Keamanan Password
-      const [adminPin, setAdminPin] = useState(() => {
-        return localStorage.getItem(STORAGE_ADMIN_PIN_KEY) || '123456';
-      });
+      // API Key & Admin Security
+      const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('jk_gemini_key') || '');
+      const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem('jk_admin_pwd') || '1234');
       const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-      const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
-      const [showAdminPanelModal, setShowAdminPanelModal] = useState(false);
-      const [loginPinInput, setLoginPinInput] = useState('');
-      const [loginError, setLoginError] = useState('');
-      const [showForgotPinView, setShowForgotPinView] = useState(false);
-      const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
-      const [newPinInput, setNewPinInput] = useState('');
-      const [recoveryError, setRecoveryError] = useState('');
 
+      // Modals
+      const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+      const [loginPasswordInput, setLoginPasswordInput] = useState('');
+      const [loginErrorMsg, setLoginErrorMsg] = useState('');
+      const [showResetPwdMode, setShowResetPwdMode] = useState(false);
+      const [recoveryCodeInput, setRecoveryCodeInput] = useState('');
+      const [resetNewPwdInput, setResetNewPwdInput] = useState('');
+
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
+      const [tempApiKeyInput, setTempApiKeyInput] = useState('');
+      const [newAdminPwdInput, setNewAdminPwdInput] = useState('');
+      const [confirmAdminPwdInput, setConfirmAdminPwdInput] = useState('');
+      const [pwdChangeMessage, setPwdChangeMessage] = useState(null);
+
+      // Modal Pilihan Versi Latihan (Soal Lama vs Soal Baru)
+      const [packageChoiceModal, setPackageChoiceModal] = useState(null);
+      const [isGeneratingVariation, setIsGeneratingVariation] = useState(false);
+      const [openedFromChoiceModal, setOpenedFromChoiceModal] = useState(false);
+
+      // Sesi jawaban sementara (30 detik) jika tidak sengaja swipe keluar dari soal
+      const savedQuizSessionRef = useRef(null);
+      const [savedSessionTick, setSavedSessionTick] = useState(0);
+
+      // Cloud Sync Status
+      const [cloudSyncStatus, setCloudSyncStatus] = useState('connecting');
+      const [cloudSyncErrorDetail, setCloudSyncErrorDetail] = useState('');
+
+      // Filter Kelas & Semester
       const [selectedGrade, setSelectedGrade] = useState(2);
       const [selectedSemester, setSelectedSemester] = useState(1);
 
+      // Bank Soal State
       const [packages, setPackages] = useState(() => {
         try {
-          const saved = localStorage.getItem(STORAGE_PACKAGES_KEY);
+          const saved = localStorage.getItem('jk_packages_v2');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -494,57 +467,17 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         } catch (e) {}
         return [DEFAULT_BUILTIN_PACKAGE];
       });
-
-      const [cloudConnected, setCloudConnected] = useState(false);
-
-      // Sinkronisasi Real-Time Cloud Firestore antar PC & iPad
-      useEffect(() => {
-        if (!firestoreDb) return;
-        const unsubscribe = firestoreDb
-          .collection(FIRESTORE_COLLECTION)
-          .onSnapshot(
-            (snapshot) => {
-              setCloudConnected(true);
-              const cloudPkgs = [];
-              snapshot.forEach((docSnap) => {
-                cloudPkgs.push({ id: docSnap.id, ...docSnap.data() });
-              });
-
-              setPackages((prevLocal) => {
-                const map = new Map();
-                map.set(DEFAULT_BUILTIN_PACKAGE.id, DEFAULT_BUILTIN_PACKAGE);
-                prevLocal.forEach((p) => {
-                  if (!p.isBuiltin) map.set(p.id, p);
-                });
-                cloudPkgs.forEach((p) => {
-                  map.set(p.id, p);
-                });
-                const merged = Array.from(map.values());
-                merged.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                return merged;
-              });
-            },
-            () => {
-              setCloudConnected(false);
-            }
-          );
-
-        return () => unsubscribe();
-      }, []);
-
       const [activePackage, setActivePackage] = useState(DEFAULT_BUILTIN_PACKAGE);
       const [packageToDelete, setPackageToDelete] = useState(null);
-      const [packageChoiceModal, setPackageChoiceModal] = useState(null);
-      const lastChoicePackageRef = useRef(null);
 
-      // Quiz Session State
+      // Quiz State
       const [currentIdx, setCurrentIdx] = useState(0);
       const [answers, setAnswers] = useState({});
       const [unsureFlags, setUnsureFlags] = useState({});
       const [quizStartTime, setQuizStartTime] = useState(Date.now());
       const [elapsedDurationText, setElapsedDurationText] = useState('0 menit 0 detik');
 
-      // Timer Mode State
+      // Timer Mode
       const [timerEnabled, setTimerEnabled] = useState(false);
       const [timeLeftSeconds, setTimeLeftSeconds] = useState(15 * 60);
       const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -553,7 +486,6 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [showUploadModal, setShowUploadModal] = useState(false);
       const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
       const [isGrading, setIsGrading] = useState(false);
-      const [isRemixingPackageId, setIsRemixingPackageId] = useState(null);
       const [gradingResults, setGradingResults] = useState(null);
       const [toastMessage, setToastMessage] = useState(null);
 
@@ -562,8 +494,8 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [genSemester, setGenSemester] = useState(1);
       const [genSubject, setGenSubject] = useState('');
       const [genTitle, setGenTitle] = useState('');
-      const [genPgCount, setGenPgCount] = useState(7);
-      const [genEssayCount, setGenEssayCount] = useState(3);
+      const [genPgCount, setGenPgCount] = useState('7');
+      const [genEssayCount, setGenEssayCount] = useState('3');
       const [inputMode, setInputMode] = useState('pdf');
       const [uploadedPdfName, setUploadedPdfName] = useState('');
       const [uploadedPdfPages, setUploadedPdfPages] = useState(0);
@@ -571,28 +503,46 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const [kisiKisiText, setKisiKisiText] = useState('');
       const [isGenerating, setIsGenerating] = useState(false);
       const [generatorError, setGeneratorError] = useState('');
-      const [isRemixingPackage, setIsRemixingPackage] = useState(false);
-      const [remixTargetTitle, setRemixTargetTitle] = useState('');
       const fileInputRef = useRef(null);
 
-      useEffect(() => {
-        localStorage.setItem(STORAGE_XP_KEY, String(xpStars));
-      }, [xpStars]);
+      // Ref untuk mencegah loop pushState saat popstate dipicu
+      const isHandlingPopStateRef = useRef(false);
+      const lastPopStateTimeRef = useRef(0);
 
+      const triggerToast = (msg, type = 'info') => {
+        setToastMessage({ msg, type });
+        setTimeout(() => setToastMessage(null), 3800);
+      };
+
+      const navigateToView = (targetView) => {
+        setActiveView(targetView);
+        if (!isHandlingPopStateRef.current) {
+          try {
+            window.history.pushState({ view: targetView }, '');
+          } catch (e) {}
+        }
+      };
+
+      const openModalWithHistory = (setterFn) => {
+        setterFn(true);
+        if (!isHandlingPopStateRef.current) {
+          try {
+            window.history.pushState({ modal: true }, '');
+          } catch (e) {}
+        }
+      };
+
+      // =======================================================================
+      // INTEGRASI TOMBOL BACK / SWIPE BACK (HP / iPAD / BROWSER)
+      // =======================================================================
       useEffect(() => {
         try {
-          localStorage.setItem(STORAGE_PACKAGES_KEY, JSON.stringify(packages));
+          window.history.replaceState({ view: 'library' }, '');
         } catch (e) {}
-      }, [packages]);
+      }, []);
 
-      // Sinkronisasi tombol Back browser / HP / iPad agar mundur bertahap ke halaman/soal sebelumnya
       useEffect(() => {
-        if (!window.history.state || !window.history.state.juarakelas) {
-          window.history.replaceState({ juarakelas: true, view: 'library' }, '');
-        }
-
         const handlePopState = () => {
-          // Pengaman khusus Safari iPad: abaikan event popstate ganda dalam < 350ms
           const now = Date.now();
           if (now - lastPopStateTimeRef.current < 350) {
             return;
@@ -600,64 +550,81 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           lastPopStateTimeRef.current = now;
           isHandlingPopStateRef.current = true;
 
-          // 1. Tutup modal yang sedang terbuka terlebih dahulu
-          if (showSubmitConfirm) {
-            setShowSubmitConfirm(false);
-          } else if (packageChoiceModal) {
-            setPackageChoiceModal(null);
-          } else if (packageToDelete) {
-            setPackageToDelete(null);
-          } else if (showUploadModal && !isGenerating) {
-            setShowUploadModal(false);
-          } else if (showAdminPanelModal) {
-            setShowAdminPanelModal(false);
-          } else if (showAdminLoginModal) {
-            setShowAdminLoginModal(false);
-          } else if (activeView === 'results') {
-            // Tugas sudah ada nilai -> kembali ke Menu Pilihan Soal paket terkait
-            const targetPkg = lastChoicePackageRef.current || activePackage;
-            clearSavedQuizSession();
-            setActiveView('library');
-            if (targetPkg) {
-              lastChoicePackageRef.current = targetPkg;
-              window.history.pushState({ juarakelas: true, modal: true }, '');
-              setPackageChoiceModal(targetPkg);
-            }
-          } else if (activeView === 'quiz') {
-            // Simpan progres soal saat ini selama 30 detik jika tidak sengaja ter-swipe keluar
-            savedQuizSessionRef.current = {
-              pkg: activePackage,
-              currentIdx,
-              answers,
-              unsureFlags,
-              quizStartTime,
-              timeLeftSeconds,
-              savedAt: Date.now()
-            };
-            setHasSavedSession(true);
-            if (savedSessionTimerRef.current) {
-              clearTimeout(savedSessionTimerRef.current);
-            }
-            savedSessionTimerRef.current = setTimeout(() => {
-              savedQuizSessionRef.current = null;
-              setHasSavedSession(false);
-              savedSessionTimerRef.current = null;
-            }, 30 * 1000);
-
+          // 1. Jika sedang di halaman Hasil & Nilai -> kembali ke menu pilihan soal
+          if (activeView === 'results') {
+            savedQuizSessionRef.current = null;
+            setSavedSessionTick((t) => t + 1);
             setIsTimerRunning(false);
             setActiveView('library');
-            const targetPkg = lastChoicePackageRef.current || activePackage;
-            if (targetPkg) {
-              lastChoicePackageRef.current = targetPkg;
-              window.history.pushState({ juarakelas: true, modal: true }, '');
-              setPackageChoiceModal(targetPkg);
-              triggerToast('Progres soal disimpan 30 detik—bisa dilanjut kalau tidak sengaja swipe!', 'info');
+            if (activePackage) {
+              setPackageChoiceModal(activePackage);
+              setOpenedFromChoiceModal(true);
             }
+            Promise.resolve().then(() => {
+              isHandlingPopStateRef.current = false;
+            });
+            return;
           }
 
-          setTimeout(() => {
+          // 2. Tutup modal yang sedang terbuka terlebih dahulu
+          if (showSubmitConfirm) {
+            setShowSubmitConfirm(false);
+            Promise.resolve().then(() => { isHandlingPopStateRef.current = false; });
+            return;
+          }
+          if (packageToDelete) {
+            setPackageToDelete(null);
+            Promise.resolve().then(() => { isHandlingPopStateRef.current = false; });
+            return;
+          }
+          if (showUploadModal && !isGenerating) {
+            setShowUploadModal(false);
+            Promise.resolve().then(() => { isHandlingPopStateRef.current = false; });
+            return;
+          }
+          if (showSettingsModal) {
+            setShowSettingsModal(false);
+            Promise.resolve().then(() => { isHandlingPopStateRef.current = false; });
+            return;
+          }
+          if (showAdminLoginModal) {
+            setShowAdminLoginModal(false);
+            Promise.resolve().then(() => { isHandlingPopStateRef.current = false; });
+            return;
+          }
+          if (packageChoiceModal && !isGeneratingVariation) {
+            setPackageChoiceModal(null);
+            setOpenedFromChoiceModal(false);
+            Promise.resolve().then(() => { isHandlingPopStateRef.current = false; });
+            return;
+          }
+
+          // 3. Jika sedang di Halaman Soal (quiz): simpan jawaban 30 detik & buka menu pilihan soal
+          if (activeView === 'quiz') {
+            savedQuizSessionRef.current = {
+              pkgId: activePackage?.id,
+              answers: { ...answers },
+              unsureFlags: { ...unsureFlags },
+              currentIdx,
+              quizStartTime,
+              savedAt: Date.now()
+            };
+            setSavedSessionTick((t) => t + 1);
+            setIsTimerRunning(false);
+            setActiveView('library');
+            if (activePackage) {
+              setPackageChoiceModal(activePackage);
+              setOpenedFromChoiceModal(true);
+            }
+            Promise.resolve().then(() => {
+              isHandlingPopStateRef.current = false;
+            });
+            return;
+          }
+
+          Promise.resolve().then(() => {
             isHandlingPopStateRef.current = false;
-          }, 0);
+          });
         };
 
         window.addEventListener('popstate', handlePopState);
@@ -665,20 +632,201 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       }, [
         activeView,
         activePackage,
-        currentIdx,
         answers,
         unsureFlags,
+        currentIdx,
         quizStartTime,
-        timeLeftSeconds,
+        openedFromChoiceModal,
         showSubmitConfirm,
-        packageChoiceModal,
         packageToDelete,
         showUploadModal,
         isGenerating,
-        showAdminPanelModal,
-        showAdminLoginModal
+        showSettingsModal,
+        showAdminLoginModal,
+        packageChoiceModal,
+        isGeneratingVariation
       ]);
 
+      // Hapus sesi sementara otomatis setelah 30 detik berlalu
+      useEffect(() => {
+        if (!savedQuizSessionRef.current) return;
+        const remaining = 30 * 1000 - (Date.now() - savedQuizSessionRef.current.savedAt);
+        if (remaining <= 0) {
+          savedQuizSessionRef.current = null;
+          setSavedSessionTick((t) => t + 1);
+          return;
+        }
+        const timer = setTimeout(() => {
+          savedQuizSessionRef.current = null;
+          setSavedSessionTick((t) => t + 1);
+        }, remaining);
+        return () => clearTimeout(timer);
+      }, [savedSessionTick]);
+
+      // Save to LocalStorage
+      useEffect(() => {
+        localStorage.setItem('jk_xp', String(xpStars));
+      }, [xpStars]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem('jk_packages_v2', JSON.stringify(packages));
+        } catch (e) {}
+      }, [packages]);
+
+      // =======================================================================
+      // REAL-TIME LISTENER FIREBASE FIRESTORE (PC <-> iPAD)
+      // =======================================================================
+      useEffect(() => {
+        if (!firestoreDb) {
+          setCloudSyncStatus('offline');
+          return;
+        }
+
+        const unsubscribe = firestoreDb.collection(FIRESTORE_COLLECTION).onSnapshot(
+          (snapshot) => {
+            const cloudList = [];
+            snapshot.forEach((doc) => {
+              const data = doc.data();
+              if (data && Array.isArray(data.questions)) {
+                cloudList.push({ ...data, id: doc.id });
+              }
+            });
+
+            if (cloudList.length === 0) {
+              savePackageToCloud(DEFAULT_BUILTIN_PACKAGE).then((res) => {
+                if (res.ok) {
+                  setCloudSyncStatus('synced');
+                  setCloudSyncErrorDetail('');
+                } else {
+                  setCloudSyncStatus('offline');
+                  setCloudSyncErrorDetail(res.reason || 'Izin tulis Firestore ditolak');
+                }
+              });
+            } else {
+              setCloudSyncStatus('synced');
+              setCloudSyncErrorDetail('');
+              setPackages((prevLocal) => {
+                const cloudIds = new Set(cloudList.map((c) => c.id));
+                const localOnly = prevLocal.filter((l) => !cloudIds.has(l.id));
+                localOnly.forEach((item) => savePackageToCloud(item));
+                const combined = [...cloudList, ...localOnly];
+                combined.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                return combined;
+              });
+            }
+          },
+          (error) => {
+            setCloudSyncStatus('offline');
+            setCloudSyncErrorDetail(`[${error?.code || 'error'}] ${error?.message || 'Gagal terhubung ke Firestore'}`);
+          }
+        );
+
+        return () => unsubscribe();
+      }, []);
+
+      const handleManualSyncAllToCloud = async () => {
+        if (!firestoreDb) {
+          triggerToast('Firebase SDK belum termuat.', 'warning');
+          return;
+        }
+        setCloudSyncStatus('connecting');
+        let lastFailReason = '';
+        for (const pkg of packages) {
+          const res = await savePackageToCloud(pkg);
+          if (!res.ok) lastFailReason = res.reason;
+        }
+        if (!lastFailReason) {
+          setCloudSyncStatus('synced');
+          setCloudSyncErrorDetail('');
+          triggerToast('Semua paket soal berhasil disinkronkan ke Cloud iPad!', 'success');
+        } else {
+          setCloudSyncStatus('offline');
+          setCloudSyncErrorDetail(lastFailReason);
+          triggerToast('Gagal sinkron: cek Firestore Rules di Firebase Console.', 'warning');
+        }
+      };
+
+      const handleOpenAdminButton = () => {
+        if (isAdminUnlocked) {
+          setTempApiKeyInput(geminiApiKey);
+          setNewAdminPwdInput('');
+          setConfirmAdminPwdInput('');
+          setPwdChangeMessage(null);
+          openModalWithHistory(setShowSettingsModal);
+        } else {
+          setLoginPasswordInput('');
+          setLoginErrorMsg('');
+          setShowResetPwdMode(false);
+          setRecoveryCodeInput('');
+          setResetNewPwdInput('');
+          openModalWithHistory(setShowAdminLoginModal);
+        }
+      };
+
+      const handleSubmitAdminLogin = (e) => {
+        e.preventDefault();
+        if (loginPasswordInput === adminPassword) {
+          setIsAdminUnlocked(true);
+          setShowAdminLoginModal(false);
+          setLoginPasswordInput('');
+          setLoginErrorMsg('');
+          triggerToast('Mode Admin aktif! Sekarang bisa tambah/hapus paket soal.', 'success');
+        } else {
+          setLoginErrorMsg('Password Admin salah. Silakan coba lagi.');
+        }
+      };
+
+      const handleResetPasswordWithRecovery = (e) => {
+        e.preventDefault();
+        if (recoveryCodeInput.trim().toUpperCase() !== 'TOMMY2026') {
+          setLoginErrorMsg('Kode pemulihan salah! Masukkan kode master yang benar.');
+          return;
+        }
+        if (resetNewPwdInput.trim().length < 4) {
+          setLoginErrorMsg('Password baru minimal 4 karakter.');
+          return;
+        }
+        const cleanPwd = resetNewPwdInput.trim();
+        setAdminPassword(cleanPwd);
+        localStorage.setItem('jk_admin_pwd', cleanPwd);
+        setIsAdminUnlocked(true);
+        setShowAdminLoginModal(false);
+        setShowResetPwdMode(false);
+        setLoginErrorMsg('');
+        triggerToast('Password Admin berhasil di-reset dan Mode Admin aktif!', 'success');
+      };
+
+      const handleLockAdmin = () => {
+        setIsAdminUnlocked(false);
+        setShowSettingsModal(false);
+        triggerToast('Mode Admin dikunci kembali.', 'info');
+      };
+
+      const handleSaveSettings = (e) => {
+        e.preventDefault();
+        const cleanedKey = tempApiKeyInput.trim();
+        setGeminiApiKey(cleanedKey);
+        localStorage.setItem('jk_gemini_key', cleanedKey);
+
+        if (newAdminPwdInput.trim().length > 0) {
+          if (newAdminPwdInput.trim().length < 4) {
+            setPwdChangeMessage({ type: 'error', text: 'Password baru minimal 4 karakter.' });
+            return;
+          }
+          if (newAdminPwdInput !== confirmAdminPwdInput) {
+            setPwdChangeMessage({ type: 'error', text: 'Konfirmasi password baru tidak cocok.' });
+            return;
+          }
+          setAdminPassword(newAdminPwdInput.trim());
+          localStorage.setItem('jk_admin_pwd', newAdminPwdInput.trim());
+        }
+
+        setShowSettingsModal(false);
+        triggerToast('Pengaturan Admin & Gemini API Key berhasil disimpan!', 'success');
+      };
+
+      // Countdown Timer
       useEffect(() => {
         if (!timerEnabled || !isTimerRunning || activeView !== 'quiz') return;
         if (timeLeftSeconds <= 0) {
@@ -699,181 +847,213 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       };
 
       const handleToggleTimerMode = () => {
-        const nextState = !timerEnabled;
-        setTimerEnabled(nextState);
-        if (nextState) {
+        const next = !timerEnabled;
+        setTimerEnabled(next);
+        if (next) {
           setTimeLeftSeconds(15 * 60);
           setIsTimerRunning(true);
-          triggerToast('Mode Pakai Waktu 15 Menit aktif! Ayo fokus ya!', 'info');
+          triggerToast('Mode Pakai Waktu 15 Menit aktif!', 'info');
         } else {
           setIsTimerRunning(false);
-          triggerToast('Mode Santai aktif! Belajar tenang tanpa batas waktu.', 'success');
+          triggerToast('Mode Santai aktif!', 'success');
         }
       };
 
-      const handleStartPackage = (pkg, fromChoiceModal = false) => {
-        if (!fromChoiceModal) {
-          lastChoicePackageRef.current = null;
-        }
-        clearSavedQuizSession();
-        setPackageChoiceModal(null);
-        setActivePackage(pkg);
+      const startQuizWithQuestions = (pkg, questionsToUse, variantLabel, isFromChoice = false) => {
+        const sessionPkg = {
+          ...pkg,
+          title: variantLabel ? `${pkg.title} • ${variantLabel}` : pkg.title,
+          questions: questionsToUse
+        };
+        setOpenedFromChoiceModal(isFromChoice);
+        setActivePackage(sessionPkg);
         setAnswers({});
         setUnsureFlags({});
         setCurrentIdx(0);
         setGradingResults(null);
         setShowSubmitConfirm(false);
+        setPackageChoiceModal(null);
         setQuizStartTime(Date.now());
         setTimeLeftSeconds(15 * 60);
         setIsTimerRunning(timerEnabled);
         navigateToView('quiz');
       };
 
-      const handleResumeSavedQuizSession = () => {
+      const handleResumeSavedSession = () => {
         const saved = savedQuizSessionRef.current;
-        if (!saved) return;
-        const isStillValid = Date.now() - saved.savedAt <= 30 * 1000;
-        clearSavedQuizSession();
-        if (!isStillValid) {
-          triggerToast('Waktu jeda lanjut soal sudah habis, mulai sesi baru ya.', 'warning');
+        if (!saved || Date.now() - saved.savedAt > 30 * 1000) {
+          savedQuizSessionRef.current = null;
+          setSavedSessionTick((t) => t + 1);
+          triggerToast('Waktu 30 detik melanjutkan soal sudah habis.', 'info');
           return;
         }
-        setPackageChoiceModal(null);
-        setActivePackage(saved.pkg);
-        setCurrentIdx(saved.currentIdx || 0);
         setAnswers(saved.answers || {});
         setUnsureFlags(saved.unsureFlags || {});
+        setCurrentIdx(saved.currentIdx || 0);
         setQuizStartTime(saved.quizStartTime || Date.now());
-        setTimeLeftSeconds(saved.timeLeftSeconds ?? 15 * 1000);
-        setGradingResults(null);
-        setShowSubmitConfirm(false);
+        savedQuizSessionRef.current = null;
+        setSavedSessionTick((t) => t + 1);
+        setPackageChoiceModal(null);
         setIsTimerRunning(timerEnabled);
         navigateToView('quiz');
       };
 
-      const handleClickStartButton = (pkg) => {
-        const isCompletedOnce = pkg.bestScore !== null && pkg.bestScore !== undefined;
-        const hasVariationSet = Boolean(
-          pkg.variationQuestions && pkg.variationQuestions.length > 0
-        );
+      const handleClickMulaiLatihan = (pkg) => {
+        const hasVariation = Array.isArray(pkg.variationQuestions) && pkg.variationQuestions.length > 0;
+        const isFirstCompleted = pkg.bestScore !== null && pkg.bestScore !== undefined;
 
-        if (hasVariationSet || (isAdminUnlocked && isCompletedOnce)) {
-          lastChoicePackageRef.current = pkg;
-          openModalWithHistory(setPackageChoiceModal, pkg);
-        } else {
-          lastChoicePackageRef.current = null;
-          handleStartPackage(pkg, false);
+        if (hasVariation || (isAdminUnlocked && isFirstCompleted)) {
+          setPackageChoiceModal(pkg);
+          if (!isHandlingPopStateRef.current) {
+            try {
+              window.history.pushState({ modal: 'packageChoice' }, '');
+            } catch (e) {}
+          }
+          return;
         }
+
+        startQuizWithQuestions(pkg, pkg.questions, '', false);
       };
 
-      const handleStartSelectedVersion = (pkg, mode) => {
-        lastChoicePackageRef.current = pkg;
-        if (mode === 'new' && pkg.variationQuestions && pkg.variationQuestions.length > 0) {
-          handleStartPackage(
+      const handleGenerateVariationInsidePackage = async (pkg) => {
+        if (!isAdminUnlocked) {
+          triggerToast('Buka Mode Admin dulu untuk membuat variasi soal baru.', 'warning');
+          return;
+        }
+        if (!geminiApiKey) {
+          setPackageChoiceModal(null);
+          setTempApiKeyInput(geminiApiKey);
+          openModalWithHistory(setShowSettingsModal);
+          triggerToast('Masukkan Gemini API Key dulu di Pengaturan Admin ya.', 'warning');
+          return;
+        }
+
+        setIsGeneratingVariation(true);
+        const systemPrompt = `Kamu adalah Guru SD profesional di Indonesia untuk aplikasi "Juara Kelas".
+Buat SET SOAL BARU (variasi baru) yang menguji indikator & topik yang sama dengan paket soal sebelumnya untuk Kelas ${pkg.grade} SD (Semester ${pkg.semester}), namun gunakan kalimat soal, angka, nama tokoh, atau contoh cerita yang segar & berbeda agar anak tidak sekadar menghafal jawaban lama.
+- Pertahankan jumlah Pilihan Ganda ("pg") dan Esai ("essay") yang sama persis.
+- Pilihan Ganda wajib 4 opsi ("A", "B", "C", "D"). Esai kosongkan "options" ([]).
+- Field "explanation" (maksimal 2-3 kalimat) dan "trapWarning" (maksimal 1-2 kalimat) wajib ramah anak dalam Bahasa Indonesia.`;
+
+        const simplifiedReference = pkg.questions.map((q, i) => ({
+          no: i + 1,
+          type: q.type,
+          unit: q.unit,
+          topicSample: q.question
+        }));
+
+        const payload = {
+          contents: [
             {
-              ...pkg,
-              title: `${pkg.title} (Soal Baru)`,
-              questions: pkg.variationQuestions
-            },
-            true
-          );
-        } else {
-          handleStartPackage(pkg, true);
-        }
-      };
+              parts: [
+                {
+                  text: `Mata Pelajaran: ${pkg.subject}\nKelas: ${pkg.grade} SD Semester ${pkg.semester}\nReferensi Indikator Soal Sebelumnya:\n${JSON.stringify(
+                    simplifiedReference,
+                    null,
+                    2
+                  )}`
+                }
+              ]
+            }
+          ],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                questions: {
+                  type: 'ARRAY',
+                  items: {
+                    type: 'OBJECT',
+                    properties: {
+                      id: { type: 'STRING' },
+                      type: { type: 'STRING', enum: ['pg', 'essay'] },
+                      unit: { type: 'STRING' },
+                      visualEmoji: { type: 'STRING' },
+                      visualCaption: { type: 'STRING' },
+                      question: { type: 'STRING' },
+                      options: {
+                        type: 'ARRAY',
+                        items: {
+                          type: 'OBJECT',
+                          properties: {
+                            key: { type: 'STRING' },
+                            text: { type: 'STRING' }
+                          },
+                          required: ['key', 'text']
+                        }
+                      },
+                      correctAnswer: { type: 'STRING' },
+                      sampleAnswer: { type: 'STRING' },
+                      explanation: { type: 'STRING' },
+                      trapWarning: { type: 'STRING' }
+                    },
+                    required: [
+                      'id',
+                      'type',
+                      'unit',
+                      'visualEmoji',
+                      'visualCaption',
+                      'question',
+                      'options',
+                      'correctAnswer',
+                      'explanation',
+                      'trapWarning'
+                    ]
+                  }
+                }
+              },
+              required: ['questions']
+            }
+          }
+        };
 
-      const handleAdminButtonClick = () => {
-        if (isAdminUnlocked) {
-          setTempApiKey(geminiApiKey);
-          openModalWithHistory(setShowAdminPanelModal, true);
-        } else {
-          setLoginPinInput('');
-          setLoginError('');
-          setShowForgotPinView(false);
-          openModalWithHistory(setShowAdminLoginModal, true);
-        }
-      };
+        try {
+          const result = await fetchGeminiWithRetry(geminiApiKey, payload);
+          const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) throw new Error('Respons Gemini kosong.');
+          const parsed = JSON.parse(rawText);
 
-      const handleAdminLoginSubmit = (e) => {
-        e.preventDefault();
-        if (loginPinInput === adminPin) {
-          setIsAdminUnlocked(true);
-          setShowAdminLoginModal(false);
-          setTempApiKey(geminiApiKey);
-          openModalWithHistory(setShowAdminPanelModal, true);
-          triggerToast('Mode Admin berhasil dibuka!', 'success');
-        } else {
-          setLoginError('Password admin salah! Silakan coba lagi atau klik Lupa password.');
-        }
-      };
+          const normalizedNewQuestions = parsed.questions.map((q, idx) => ({
+            ...q,
+            id: `q_var_${Date.now()}_${idx + 1}`
+          }));
 
-      const handleResetPasswordSubmit = (e) => {
-        e.preventDefault();
-        if (recoveryCodeInput.trim().toUpperCase() !== ADMIN_RECOVERY_CODE) {
-          setRecoveryError('Kode pemulihan tidak cocok!');
-          return;
-        }
-        if (newPinInput.trim().length < 4) {
-          setRecoveryError('Password baru minimal 4 karakter.');
-          return;
-        }
-        const cleanPin = newPinInput.trim();
-        setAdminPin(cleanPin);
-        localStorage.setItem(STORAGE_ADMIN_PIN_KEY, cleanPin);
-        setShowForgotPinView(false);
-        setRecoveryCodeInput('');
-        setNewPinInput('');
-        setRecoveryError('');
-        triggerToast('Password admin berhasil diperbarui! Silakan masuk.', 'success');
-      };
+          const updatedPkg = {
+            ...pkg,
+            variationQuestions: normalizedNewQuestions
+          };
 
-      const handleLockAdmin = () => {
-        setIsAdminUnlocked(false);
-        setShowAdminPanelModal(false);
-        triggerToast('Menu Admin telah dikunci kembali.', 'info');
-      };
+          setPackages((prev) => prev.map((p) => (p.id === pkg.id ? updatedPkg : p)));
+          await savePackageToCloud(updatedPkg);
 
-      const handleSaveApiKey = (e) => {
-        e.preventDefault();
-        const trimmed = tempApiKey.trim();
-        setGeminiApiKey(trimmed);
-        localStorage.setItem(STORAGE_APIKEY_KEY, trimmed);
-        triggerToast('Gemini API Key berhasil disimpan di perangkat ini!', 'success');
-      };
-
-      const handleManualSyncToCloud = async () => {
-        const customPkgs = packages.filter((p) => !p.isBuiltin);
-        if (customPkgs.length === 0) {
-          triggerToast('Belum ada paket soal buatanmu untuk disinkronkan.', 'info');
-          return;
-        }
-        let successCount = 0;
-        let lastReason = '';
-        for (const pkg of customPkgs) {
-          const res = await savePackageToCloud(pkg);
-          if (res.ok) successCount += 1;
-          else lastReason = res.reason;
-        }
-        if (successCount === customPkgs.length) {
-          triggerToast(`Berhasil mengirim ${successCount} paket soal ke Cloud iPad!`, 'success');
-        } else {
-          triggerToast(`Sebagian gagal (${lastReason}). Cek Firestore Rules ya!`, 'warning');
+          setIsGeneratingVariation(false);
+          startQuizWithQuestions(updatedPkg, normalizedNewQuestions, 'Soal Baru (Variasi)', true);
+          triggerToast('Soal Baru berhasil dibuat & tersimpan ke Cloud iPad!', 'success');
+        } catch (err) {
+          setIsGeneratingVariation(false);
+          triggerToast(`Gagal membuat soal baru: ${err.message}`, 'warning');
         }
       };
 
       const openUploadModalForCurrentFilter = () => {
+        if (!isAdminUnlocked) {
+          handleOpenAdminButton();
+          return;
+        }
         setGenGrade(selectedGrade);
         setGenSemester(selectedSemester);
         setGenSubject('');
         setGenTitle('');
-        setGenPgCount(7);
-        setGenEssayCount(3);
+        setGenPgCount('7');
+        setGenEssayCount('3');
         setInputMode('pdf');
         setUploadedPdfName('');
         setUploadedPdfPages(0);
         setKisiKisiText('');
         setGeneratorError('');
-        openModalWithHistory(setShowUploadModal, true);
+        openModalWithHistory(setShowUploadModal);
       };
 
       const handlePdfFileSelected = async (file) => {
@@ -882,16 +1062,20 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           setGeneratorError('Mohon unggah file berformat PDF (.pdf) ya.');
           return;
         }
+
         setIsExtractingPdf(true);
         setGeneratorError('');
+
         try {
           const { text, numPages } = await extractTextFromPdfFile(file);
           if (!text || text.length < 15) {
             setGeneratorError(
-              'Teks dalam PDF tidak terbaca (kemungkinan hasil scan gambar). Gunakan tab Tempel Teks.'
+              'Teks dalam PDF tidak terbaca (kemungkinan hasil scan gambar). Silakan pilih tab "Tempel Teks Manual".'
             );
+            setIsExtractingPdf(false);
             return;
           }
+
           setUploadedPdfName(file.name);
           setUploadedPdfPages(numPages);
           setKisiKisiText(text);
@@ -901,55 +1085,52 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
           if (!genSubject) {
             const lower = cleanName.toLowerCase();
             if (lower.includes('english') || lower.includes('inggris')) setGenSubject('Bahasa Inggris');
-            else if (lower.includes('arab')) setGenSubject('Bahasa Arab');
             else if (lower.includes('matematika') || lower.includes('mtk')) setGenSubject('Matematika');
             else if (lower.includes('ipas') || lower.includes('ipa')) setGenSubject('IPAS');
             else if (lower.includes('indonesia')) setGenSubject('Bahasa Indonesia');
             else if (lower.includes('pai') || lower.includes('agama') || lower.includes('quran'))
               setGenSubject('Pendidikan Agama Islam');
+            else if (lower.includes('pancasila') || lower.includes('ppkn'))
+              setGenSubject('Pendidikan Pancasila');
           }
-          triggerToast(`Berhasil membaca ${numPages} halaman PDF!`, 'success');
+
+          triggerToast(`Berhasil membaca ${numPages} halaman dari ${file.name}!`, 'success');
         } catch (err) {
-          setGeneratorError(`Gagal membaca PDF: ${err.message}`);
+          setGeneratorError(`Gagal membaca file PDF: ${err.message}`);
         } finally {
           setIsExtractingPdf(false);
         }
       };
 
-      const handleConfirmDeletePackage = async () => {
-        if (!packageToDelete || !isAdminUnlocked) return;
-        const targetId = packageToDelete.id;
-        setPackageToDelete(null);
-        setPackages((prev) => prev.filter((p) => p.id !== targetId));
-        await deletePackageFromCloud(targetId);
-        triggerToast('Paket soal berhasil dihapus dari Cloud & perangkat.', 'info');
-      };
-
       const handleGenerateAndSavePackage = async (e) => {
         if (e) e.preventDefault();
         if (!geminiApiKey) {
-          setGeneratorError('Pasang Gemini API Key terlebih dahulu di Menu Admin.');
+          setGeneratorError(
+            'Kamu belum memasukkan Gemini API Key. Klik tombol "Admin" di pojok kanan atas untuk menempelkan API Key dari Google AI Studio.'
+          );
           return;
         }
         if (!kisiKisiText.trim()) {
-          setGeneratorError('Unggah PDF kisi-kisi atau tempel teks kisi-kisi terlebih dahulu.');
+          setGeneratorError('Silakan unggah file PDF kisi-kisi atau tempel teks kisi-kisi terlebih dahulu.');
           return;
         }
 
         const finalSubject = genSubject.trim() || 'Tematik / Umum';
         const finalTitle =
           genTitle.trim() || `Latihan ${finalSubject} - Kelas ${genGrade} Semester ${genSemester}`;
+        const safePgCount = Math.min(20, Math.max(1, parseInt(genPgCount, 10) || 7));
+        const safeEssayCount = Math.min(15, Math.max(0, parseInt(genEssayCount, 10) || 0));
 
         setIsGenerating(true);
         setGeneratorError('');
 
         const systemPrompt = `Kamu adalah Guru SD profesional di Indonesia untuk aplikasi "Juara Kelas".
-Buat tepat ${genPgCount} soal Pilihan Ganda (type: "pg") dan ${genEssayCount} soal Esai / Isian Singkat (type: "essay") sesuai indikator kisi-kisi untuk Kelas ${genGrade} SD (Semester ${genSemester}).
+Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} soal Esai / Isian Singkat (type: "essay") sesuai indikator kisi-kisi untuk Kelas ${genGrade} SD (Semester ${genSemester}).
 - Untuk Pilihan Ganda ("pg"), isi 4 opsi ("A", "B", "C", "D") dan tentukan "correctAnswer".
 - Untuk Esai ("essay"), kosongkan array "options" ([]), isi "correctAnswer" dan "sampleAnswer".
-- Field "explanation" (pembahasan langkah demi langkah) dan "trapWarning" (tips awas jebakan) wajib ramah anak dalam Bahasa Indonesia.`;
+- Field "explanation" (pembahasan singkat & jelas maksimal 2-3 kalimat) dan "trapWarning" (tips singkat maksimal 1-2 kalimat) wajib ramah anak dalam Bahasa Indonesia.`;
 
-        const userQuery = `Mata Pelajaran: ${finalSubject}\nJenjang: Kelas ${genGrade} SD - Semester ${genSemester}\n\nISI KISI-KISI:\n${kisiKisiText.slice(0, 28000)}`;
+        const userQuery = `Mata Pelajaran: ${finalSubject}\nJenjang: Kelas ${genGrade} SD - Semester ${genSemester}\n\nISI KISI-KISI:\n${kisiKisiText.slice(0, 18000)}`;
 
         const payload = {
           contents: [{ parts: [{ text: userQuery }] }],
@@ -1012,10 +1193,6 @@ Buat tepat ${genPgCount} soal Pilihan Ganda (type: "pg") dan ${genEssayCount} so
           if (!rawText) throw new Error('Respons dari Gemini kosong.');
 
           const parsed = JSON.parse(rawText);
-          if (!parsed.questions || parsed.questions.length === 0) {
-            throw new Error('Soal belum berhasil dibuat.');
-          }
-
           const normalizedQuestions = parsed.questions.map((q, idx) => ({
             ...q,
             id: `q_${Date.now()}_${idx + 1}`
@@ -1035,19 +1212,24 @@ Buat tepat ${genPgCount} soal Pilihan Ganda (type: "pg") dan ${genEssayCount} so
           };
 
           setPackages((prev) => [newPackageObj, ...prev]);
-          const cloudRes = await savePackageToCloud(newPackageObj);
+          const syncRes = await savePackageToCloud(newPackageObj);
 
           setSelectedGrade(Number(genGrade));
           setSelectedSemester(Number(genSemester));
           setShowUploadModal(false);
-          setActiveView('library');
+          navigateToView('library');
 
-          triggerToast(
-            cloudRes.ok
-              ? `Paket soal tersimpan di Cloud & siap dibuka di iPad!`
-              : `Paket soal tersimpan di perangkat ini!`,
-            'success'
-          );
+          if (syncRes.ok) {
+            triggerToast(
+              `Hore! Paket soal tersimpan & otomatis tersinkron ke Cloud iPad!`,
+              'success'
+            );
+          } else {
+            triggerToast(
+              `Paket soal tersimpan di PC! (Cloud belum sinkron: ${syncRes.reason})`,
+              'warning'
+            );
+          }
         } catch (err) {
           setGeneratorError(
             `Gagal membuat soal: ${err.message}. Pastikan Gemini API Key kamu benar dan aktif ya.`
@@ -1057,151 +1239,14 @@ Buat tepat ${genPgCount} soal Pilihan Ganda (type: "pg") dan ${genEssayCount} so
         }
       };
 
-      // =========================================================================
-      // GENERATOR SOAL VARIASI BARU (AI REMIX) DARI PAKET YANG SUDAH DIKERJAKAN
-      // =========================================================================
-      const handleGenerateVariationFromPackage = async (sourcePkg) => {
-        if (!isAdminUnlocked) {
-          triggerToast('Buka Menu Admin terlebih dahulu untuk membuat soal baru!', 'warning');
-          return;
-        }
-        if (sourcePkg.bestScore === null || sourcePkg.bestScore === undefined) {
-          triggerToast('Selesaikan dulu paket soal utamanya sampai keluar nilai ya!', 'warning');
-          return;
-        }
-        if (!geminiApiKey) {
-          triggerToast('Fitur Soal Variasi Baru butuh Gemini API Key di Menu Admin.', 'warning');
-          return;
-        }
+      const handleConfirmDeletePackage = async () => {
+        if (!packageToDelete || !isAdminUnlocked) return;
+        const targetId = packageToDelete.id;
+        setPackageToDelete(null);
 
-        setIsRemixingPackageId(sourcePkg.id);
-        triggerToast('Meracik soal variasi baru sesuai kisi-kisi paket ini...', 'info');
-
-        const pgCount = Math.max(1, sourcePkg.questions.filter((q) => q.type === 'pg').length);
-        const essayCount = sourcePkg.questions.filter((q) => q.type === 'essay').length;
-
-        const referenceOutline = sourcePkg.questions
-          .map(
-            (q, i) =>
-              `${i + 1}. [${q.type.toUpperCase()}] Topik: ${q.unit} | Contoh pola soal: ${q.question}`
-          )
-          .join('\n');
-
-        const systemPrompt = `Kamu adalah Guru SD profesional di Indonesia untuk aplikasi "Juara Kelas".
-Tugasmu membuat 1 SET SOAL VARIASI BARU (AI Remix) dari paket soal yang sudah pernah dikerjakan siswa Kelas ${sourcePkg.grade} SD (Semester ${sourcePkg.semester}, Mapel: ${sourcePkg.subject}).
-Aturan wajib:
-1. Buat tepat ${pgCount} soal Pilihan Ganda (type: "pg") dan ${essayCount} soal Esai (type: "essay").
-2. UBAH cerita, nama tokoh, angka, benda, atau kalimat pertanyaannya sehingga benar-benar baru dan segar (siswa tidak bisa sekadar menghafal kunci jawaban lama), namun tetap menguji indikator & unit kompetensi yang sama persis!
-3. Sesuaikan tingkat kesulitan untuk Kelas ${sourcePkg.grade} SD.
-4. Field "explanation" (pembahasan langkah demi langkah) dan "trapWarning" (tips awas jebakan) wajib dalam Bahasa Indonesia yang ramah anak.
-5. Jika butuh ilustrasi, isi "visualEmoji" dan "visualCaption"; jika tidak, isi "".`;
-
-        const userQuery = `Judul Paket Asal: ${sourcePkg.title}
-Mata Pelajaran: ${sourcePkg.subject} | Kelas ${sourcePkg.grade} SD Semester ${sourcePkg.semester}
-
-POLA UNIT & INDIKATOR SOAL ASAL YANG HARUS DIBUATKAN VARIASI BARUNYA:
-${referenceOutline}`;
-
-        const payload = {
-          contents: [{ parts: [{ text: userQuery }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                questions: {
-                  type: 'ARRAY',
-                  items: {
-                    type: 'OBJECT',
-                    properties: {
-                      id: { type: 'STRING' },
-                      type: { type: 'STRING', enum: ['pg', 'essay'] },
-                      unit: { type: 'STRING' },
-                      visualEmoji: { type: 'STRING' },
-                      visualCaption: { type: 'STRING' },
-                      question: { type: 'STRING' },
-                      options: {
-                        type: 'ARRAY',
-                        items: {
-                          type: 'OBJECT',
-                          properties: {
-                            key: { type: 'STRING' },
-                            text: { type: 'STRING' }
-                          },
-                          required: ['key', 'text']
-                        }
-                      },
-                      correctAnswer: { type: 'STRING' },
-                      sampleAnswer: { type: 'STRING' },
-                      explanation: { type: 'STRING' },
-                      trapWarning: { type: 'STRING' }
-                    },
-                    required: [
-                      'id',
-                      'type',
-                      'unit',
-                      'visualEmoji',
-                      'visualCaption',
-                      'question',
-                      'options',
-                      'correctAnswer',
-                      'explanation',
-                      'trapWarning'
-                    ]
-                  }
-                }
-              },
-              required: ['questions']
-            }
-          }
-        };
-
-        try {
-          const result = await fetchGeminiWithRetry(geminiApiKey, payload);
-          const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (!rawText) throw new Error('Respons dari Gemini kosong.');
-
-          const parsed = JSON.parse(rawText);
-          if (!parsed.questions || parsed.questions.length === 0) {
-            throw new Error('Soal variasi belum berhasil dibuat.');
-          }
-
-          const normalizedQuestions = parsed.questions.map((q, idx) => ({
-            ...q,
-            id: `q_var_${Date.now()}_${idx + 1}`
-          }));
-
-          const updatedParentPkg = {
-            ...sourcePkg,
-            variationQuestions: normalizedQuestions,
-            variationCreatedAt: Date.now()
-          };
-
-          setPackages((prev) =>
-            prev.map((p) => (p.id === updatedParentPkg.id ? updatedParentPkg : p))
-          );
-          if (activePackage.id === updatedParentPkg.id) {
-            setActivePackage(updatedParentPkg);
-          }
-          if (lastChoicePackageRef.current && lastChoicePackageRef.current.id === updatedParentPkg.id) {
-            lastChoicePackageRef.current = updatedParentPkg;
-          }
-
-          if (!updatedParentPkg.isBuiltin) {
-            await savePackageToCloud(updatedParentPkg);
-          }
-
-          triggerToast(
-            'Soal Baru berhasil dibuat! Klik Mulai Latihan untuk memilih Soal Lama atau Soal Baru.',
-            'success'
-          );
-          setPackageChoiceModal(updatedParentPkg);
-        } catch (err) {
-          triggerToast(`Gagal membuat soal variasi: ${err.message}`, 'warning');
-        } finally {
-          setIsRemixingPackageId(null);
-        }
+        setPackages((prev) => prev.filter((p) => p.id !== targetId));
+        await deletePackageFromCloud(targetId);
+        triggerToast('Paket soal berhasil dihapus dari perangkat & Cloud.', 'info');
       };
 
       const handleFinalizeAndGradeExam = async () => {
@@ -1229,13 +1274,20 @@ ${referenceOutline}`;
                 {
                   parts: [
                     {
-                      text: `Nilai jawaban esai siswa SD berikut (skor 0-100) dengan toleransi huruf besar/kecil dan tanda baca:\n${JSON.stringify(
+                      text: `Evaluasi jawaban esai siswa Kelas ${activePackage.grade} SD berikut ini:\n${JSON.stringify(
                         essayPayloadList
                       )}`
                     }
                   ]
                 }
               ],
+              systemInstruction: {
+                parts: [
+                  {
+                    text: 'Kamu adalah guru SD yang ramah. Nilai jawaban esai siswa secara bijaksana (abaikan kapitalisasi/tanda baca kecil). Skor 100 jika benar, 50-85 jika sebagian benar, 0 jika salah. Beri feedback singkat ramah anak dalam Bahasa Indonesia.'
+                  }
+                ]
+              },
               generationConfig: {
                 responseMimeType: 'application/json',
                 responseSchema: {
@@ -1254,7 +1306,7 @@ ${referenceOutline}`;
               }
             };
 
-            const result = await fetchGeminiWithRetry(geminiApiKey, payload, 1);
+            const result = await fetchGeminiWithRetry(geminiApiKey, payload);
             const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
             if (rawText) {
               JSON.parse(rawText).forEach((item) => {
@@ -1282,1480 +1334,12 @@ ${referenceOutline}`;
               score: isExact ? 100 : isPartial ? 70 : 0,
               isCorrect: isExact || isPartial,
               feedback: isExact
-                ? 'Hebat sekali! Jawabanmu tepat dan sesuai kunci!'
+                ? 'Hebat sekali! Jawabanmu tepat dan sesuai dengan kunci jawaban!'
                 : isPartial
                 ? 'Hampir sempurna! Cek susunan lengkapnya di pembahasan ya.'
-                : 'Belum tepat, yuk baca pembahasan di bawah supaya makin paham!'
+                : 'Belum tepat, yuk baca pembahasan langkah demi langkah di bawah!'
             };
           }
         });
 
-        let accumulatedScore = 0;
-        let correctCount = 0;
-
-        const evaluatedItems = activePackage.questions.map((q, index) => {
-          const userAns = (answers[q.id] || '').trim();
-          if (q.type === 'pg') {
-            const isCorrect = userAns.toUpperCase() === q.correctAnswer.toUpperCase();
-            const itemScore = isCorrect ? 100 : 0;
-            accumulatedScore += itemScore;
-            if (isCorrect) correctCount += 1;
-
-            const selectedOptObj = q.options.find((o) => o.key === userAns);
-            const correctOptObj = q.options.find((o) => o.key === q.correctAnswer);
-
-            return {
-              ...q,
-              number: index + 1,
-              userAnswerDisplay: selectedOptObj
-                ? `${selectedOptObj.key}. ${selectedOptObj.text}`
-                : '(Belum dijawab)',
-              correctAnswerDisplay: correctOptObj
-                ? `${correctOptObj.key}. ${correctOptObj.text}`
-                : q.correctAnswer,
-              isCorrect,
-              score: itemScore,
-              aiFeedback: null
-            };
-          } else {
-            const aiEval = aiEssayEvaluations[q.id];
-            accumulatedScore += aiEval.score;
-            if (aiEval.score >= 70) correctCount += 1;
-
-            return {
-              ...q,
-              number: index + 1,
-              userAnswerDisplay: userAns || '(Belum dijawab)',
-              correctAnswerDisplay: q.sampleAnswer || q.correctAnswer,
-              isCorrect: aiEval.score >= 70,
-              score: aiEval.score,
-              aiFeedback: aiEval.feedback
-            };
-          }
-        });
-
-        const finalScore = Math.round(accumulatedScore / activePackage.questions.length);
-        const earnedStars = Math.max(10, Math.round(finalScore / 2));
-        setXpStars((prev) => prev + earnedStars);
-
-        const prevBest = activePackage.bestScore ?? -1;
-        if (finalScore > prevBest) {
-          const updatedPkg = { ...activePackage, bestScore: finalScore };
-          setActivePackage(updatedPkg);
-          setPackages((prev) => prev.map((p) => (p.id === updatedPkg.id ? updatedPkg : p)));
-          if (!updatedPkg.isBuiltin) {
-            await savePackageToCloud(updatedPkg);
-          }
-        }
-
-        setGradingResults({
-          finalScore,
-          correctCount,
-          totalQuestions: activePackage.questions.length,
-          earnedStars,
-          items: evaluatedItems
-        });
-
-        setIsGrading(false);
-        navigateToView('results');
-      };
-
-      const filteredPackages = packages.filter(
-        (pkg) => Number(pkg.grade) === selectedGrade && Number(pkg.semester) === selectedSemester
-      );
-
-      const currentQuestion = activePackage.questions[currentIdx] || activePackage.questions[0];
-      const answeredCount = activePackage.questions.filter(
-        (q) => answers[q.id] && answers[q.id].trim().length > 0
-      ).length;
-      const unsureCount = activePackage.questions.filter((q) => unsureFlags[q.id]).length;
-
-      const getStarCount = (score) => {
-        if (score >= 90) return 5;
-        if (score >= 75) return 4;
-        if (score >= 60) return 3;
-        if (score >= 40) return 2;
-        return 1;
-      };
-
-      const getEncouragementMessage = (score) => {
-        if (score >= 90) return 'Luar Biasa! Kamu Bintang Juara Kelas Hari Ini! 🏆✨';
-        if (score >= 75) return 'Hebat Sekali! Sedikit Lagi Menuju Nilai Sempurna! 🌟👏';
-        if (score >= 60) return 'Bagus! Terus Berlatih Supaya Makin Jago Ya! 💪😊';
-        return 'Tetap Semangat! Yuk Pelajari Pembahasannya Bersama-sama! 🚀📚';
-      };
-
-      return (
-        <div className="min-h-screen flex flex-col justify-between">
-          <div className="pb-14">
-            {/* TOP HEADER */}
-            <header className="sticky top-0 z-30 bg-[#1a1c42]/90 backdrop-blur-md border-b border-white/10 shadow-lg shadow-black/20">
-              <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTimerRunning(false);
-                    setActiveView('library');
-                  }}
-                  className="flex items-center gap-3 text-left focus:outline-none group"
-                >
-                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-[#f26d5b] to-amber-400 flex items-center justify-center text-white text-xl shadow-md shadow-rose-950/30 group-hover:scale-105 transition-transform">
-                    🎓
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-white">
-                        Juara <span className="text-[#ff8370]">Kelas</span>
-                      </h1>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400/20 text-amber-200 border border-amber-300/30 backdrop-blur-sm">
-                        ⭐ {xpStars} XP
-                      </span>
-                    </div>
-                    <p className="text-xs font-semibold text-indigo-200/80">
-                      {activeView === 'library'
-                        ? 'Bank Soal & Kisi-Kisi Pintar Kelas 1 – 6 SD'
-                        : `Kelas ${activePackage.grade} • Semester ${activePackage.semester} • ${activePackage.subject}`}
-                    </p>
-                  </div>
-                </button>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {activeView === 'quiz' ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsTimerRunning(false);
-                          setActiveView('library');
-                        }}
-                        className="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white/10 hover:bg-white/20 text-white border border-white/15 backdrop-blur-md transition-all"
-                      >
-                        ← Daftar Paket
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleToggleTimerMode}
-                        className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border backdrop-blur-md transition-all ${
-                          timerEnabled
-                            ? 'bg-rose-500/25 border-rose-400/40 text-rose-200'
-                            : 'bg-emerald-500/20 border-emerald-400/35 text-emerald-200'
-                        }`}
-                      >
-                        ⏱️ {timerEnabled ? `Waktu: ${formatTime(timeLeftSeconds)}` : 'Mode Santai'}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleAdminButtonClick}
-                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold border backdrop-blur-md transition-all ${
-                        isAdminUnlocked
-                          ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/30'
-                          : 'bg-white/10 border-white/15 text-indigo-100 hover:bg-white/20'
-                      }`}
-                    >
-                      {isAdminUnlocked ? '🛠️ Admin Aktif' : '🔒 Admin'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </header>
-
-            {/* TOAST NOTIFICATION */}
-            {toastMessage && (
-              <div className="fixed bottom-5 right-5 z-50">
-                <div
-                  className={`px-4 py-3 rounded-2xl shadow-lg border-2 font-bold text-sm flex items-center gap-2 ${
-                    toastMessage.type === 'success'
-                      ? 'bg-emerald-600 border-emerald-400 text-white'
-                      : toastMessage.type === 'warning'
-                      ? 'bg-amber-500 border-amber-300 text-white'
-                      : 'bg-indigo-600 border-indigo-400 text-white'
-                  }`}
-                >
-                  <span>😊</span>
-                  <span>{toastMessage.msg}</span>
-                </div>
-              </div>
-            )}
-
-            {/* VIEW 1: LIBRARY PER KELAS & SEMESTER */}
-            {activeView === 'library' && (
-              <main className="max-w-6xl mx-auto px-4 pt-7 space-y-6">
-                <div className="bg-white/[0.09] backdrop-blur-md rounded-3xl border border-white/15 shadow-xl p-5 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-                  <div className="space-y-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-amber-200 border border-white/15 text-xs font-extrabold tracking-wide">
-                      <span>✨ Belajar Ceria Berbasis Kisi-Kisi Sekolah</span>
-                    </div>
-                    <h2 className="text-xl sm:text-3xl font-extrabold text-white leading-tight">
-                      Pilih Kelas & Semester untuk Mulai{' '}
-                      <span className="inline-block px-2.5 py-0.5 rounded-xl bg-[#f26d5b] text-white shadow-sm">
-                        Latihan!
-                      </span>
-                    </h2>
-                    <p className="text-sm text-indigo-100/80 max-w-2xl">
-                      Selesaikan paket soal utama untuk membuka tombol{' '}
-                      <strong className="text-amber-200">✨ Soal Baru (AI Remix)</strong> agar
-                      dapat berlatih dengan variasi soal yang segar setiap hari.
-                    </p>
-                  </div>
-
-                  {isAdminUnlocked && (
-                    <button
-                      type="button"
-                      onClick={openUploadModalForCurrentFilter}
-                      className="w-full md:w-auto shrink-0 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-[#f26d5b] to-amber-500 hover:from-[#e05b49] hover:to-amber-600 text-white font-extrabold text-sm shadow-lg shadow-rose-950/30 transition-all"
-                    >
-                      📄 + Upload PDF Kisi-Kisi Baru
-                    </button>
-                  )}
-                </div>
-
-                {/* FILTER KELAS 1-6 & SEMESTER 1-2 */}
-                <div className="bg-white/[0.09] backdrop-blur-md rounded-3xl border border-white/15 shadow-xl p-5 space-y-5">
-                  <div>
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200/80 block mb-2.5">
-                      1. Pilih Jenjang Kelas SD:
-                    </span>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-                      {[1, 2, 3, 4, 5, 6].map((gradeNum) => {
-                        const isActive = selectedGrade === gradeNum;
-                        const countInGrade = packages.filter(
-                          (p) => Number(p.grade) === gradeNum
-                        ).length;
-
-                        return (
-                          <button
-                            key={gradeNum}
-                            type="button"
-                            onClick={() => setSelectedGrade(gradeNum)}
-                            className={`py-3 px-3 rounded-2xl border font-extrabold text-sm transition-all flex flex-col items-center justify-center backdrop-blur-md ${
-                              isActive
-                                ? 'bg-[#f26d5b] border-[#ff9282] text-white shadow-lg shadow-rose-950/40 scale-[1.02]'
-                                : 'bg-white/[0.07] border-white/15 text-indigo-100 hover:bg-white/[0.15] hover:border-white/30'
-                            }`}
-                          >
-                            <span>Kelas {gradeNum}</span>
-                            <span
-                              className={`text-[11px] font-bold ${
-                                isActive ? 'text-rose-100' : 'text-indigo-200/60'
-                              }`}
-                            >
-                              {countInGrade} Paket
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200/80 block mb-2">
-                        2. Pilih Semester:
-                      </span>
-                      <div className="inline-flex p-1.5 rounded-2xl bg-white/[0.08] border border-white/15 backdrop-blur-md">
-                        {[
-                          { val: 1, label: 'Semester 1 (Ganjil)' },
-                          { val: 2, label: 'Semester 2 (Genap)' }
-                        ].map((sem) => {
-                          const isSelected = selectedSemester === sem.val;
-                          return (
-                            <button
-                              key={sem.val}
-                              type="button"
-                              onClick={() => setSelectedSemester(sem.val)}
-                              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition-all ${
-                                isSelected
-                                  ? 'bg-white text-slate-900 shadow-md'
-                                  : 'text-indigo-100/80 hover:text-white hover:bg-white/10'
-                              }`}
-                            >
-                              📅 {sem.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="text-xs sm:text-sm font-bold text-amber-100 bg-amber-400/15 border border-amber-300/25 backdrop-blur-md px-4 py-2.5 rounded-2xl">
-                      Menampilkan:{' '}
-                      <span className="text-amber-300 font-extrabold">
-                        Kelas {selectedGrade} SD • Semester {selectedSemester}
-                      </span>{' '}
-                      ({filteredPackages.length} Paket)
-                    </div>
-                  </div>
-                </div>
-
-                {/* DAFTAR KARTU PAKET SOAL */}
-                {filteredPackages.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {filteredPackages.map((pkg) => {
-                      const pgCount = pkg.questions.filter((q) => q.type === 'pg').length;
-                      const essayCount = pkg.questions.filter((q) => q.type === 'essay').length;
-                      const isCompletedOnce =
-                        pkg.bestScore !== null && pkg.bestScore !== undefined;
-                      const hasVariationSet = Boolean(
-                        pkg.variationQuestions && pkg.variationQuestions.length > 0
-                      );
-
-                      return (
-                        <div
-                          key={pkg.id}
-                          className="bg-[#fffdf7] text-slate-800 rounded-3xl border-2 border-amber-200/80 hover:border-[#f26d5b] shadow-xl shadow-black/20 transition-all p-5 sm:p-6 flex flex-col justify-between gap-4"
-                        >
-                          <div>
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="px-3 py-1 rounded-xl bg-indigo-100 text-indigo-800 font-extrabold text-xs">
-                                  {pkg.subject}
-                                </span>
-                                <span className="px-2.5 py-1 rounded-xl bg-amber-100/80 text-amber-900 border border-amber-200 font-bold text-xs">
-                                  Kls {pkg.grade} • Sem {pkg.semester}
-                                </span>
-                              </div>
-
-                              {isCompletedOnce ? (
-                                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs border border-emerald-200">
-                                  🏆 Skor Terbaik: {pkg.bestScore}
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-bold text-xs">
-                                  Belum Dikerjakan
-                                </span>
-                              )}
-                            </div>
-
-                            <h3 className="text-lg font-extrabold text-slate-900 mb-2 leading-snug">
-                              {pkg.title}
-                            </h3>
-
-                            {pkg.sourcePdfName && (
-                              <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-amber-50/90 px-3 py-1.5 rounded-xl border border-amber-200/70 mb-3 max-w-full">
-                                <span className="truncate">📄 Sumber: {pkg.sourcePdfName}</span>
-                              </div>
-                            )}
-
-                            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600">
-                              <span className="px-2.5 py-1 rounded-lg bg-sky-100/80 text-sky-900">
-                                {pgCount} Pilihan Ganda
-                              </span>
-                              <span className="px-2.5 py-1 rounded-lg bg-purple-100/80 text-purple-900">
-                                {essayCount} Esai / Isian
-                              </span>
-                              {hasVariationSet && (
-                                <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                  ✨ Tersedia Soal Baru
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="pt-4 border-t border-amber-200/60 flex items-center justify-between gap-2.5">
-                            <button
-                              type="button"
-                              onClick={() => handleClickStartButton(pkg)}
-                              className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-[#f26d5b] to-amber-500 hover:from-[#e05b49] hover:to-amber-600 text-white font-extrabold text-sm shadow-md shadow-rose-200 transition-all"
-                            >
-                              ▶️ Mulai Latihan
-                            </button>
-
-                            {isAdminUnlocked && !pkg.isBuiltin && (
-                              <button
-                                type="button"
-                                onClick={() => setPackageToDelete(pkg)}
-                                className="p-3 rounded-2xl border-2 border-rose-200 text-rose-500 hover:bg-rose-50 font-bold text-xs"
-                                title="Hapus paket soal (Khusus Admin)"
-                              >
-                                🗑️
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="bg-white/[0.08] backdrop-blur-xl rounded-3xl border border-dashed border-white/25 p-10 text-center space-y-4">
-                    <div className="text-4xl">📂</div>
-                    <h3 className="text-lg font-extrabold text-white">
-                      Belum Ada Paket Soal untuk Kelas {selectedGrade} • Semester {selectedSemester}
-                    </h3>
-                    <p className="text-sm text-indigo-200/80 max-w-md mx-auto">
-                      Paket soal akan tampil otomatis di sini setelah ditambahkan melalui Menu Admin.
-                    </p>
-                    {isAdminUnlocked && (
-                      <button
-                        type="button"
-                        onClick={openUploadModalForCurrentFilter}
-                        className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#f26d5b] to-amber-500 text-white font-extrabold text-sm shadow-md"
-                      >
-                        📄 Upload Kisi-Kisi PDF Sekarang
-                      </button>
-                    )}
-                  </div>
-                )}
-              </main>
-            )}
-
-            {/* VIEW 2: STUDENT QUIZ MODE */}
-            {activeView === 'quiz' && currentQuestion && (
-              <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-6">
-                <div className="bg-white/[0.08] backdrop-blur-xl rounded-2xl px-3.5 py-2.5 sm:p-4 mb-3 sm:mb-6 border border-white/15 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-                  <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-2.5">
-                    <span className="px-2.5 py-1 rounded-xl bg-[#f26d5b] text-white font-extrabold text-xs sm:text-sm">
-                      Soal {currentIdx + 1} dari {activePackage.questions.length}
-                    </span>
-                    <span className="text-xs sm:text-sm font-semibold text-indigo-100">
-                      Terjawab: <strong className="text-amber-300">{answeredCount}</strong> /{' '}
-                      {activePackage.questions.length}
-                    </span>
-                  </div>
-                  <div className="w-full sm:w-64 h-2 sm:h-3 bg-white/15 rounded-full overflow-hidden border border-white/10">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#f26d5b] to-amber-400 transition-all duration-300 rounded-full"
-                      style={{
-                        width: `${Math.round(
-                          (answeredCount / activePackage.questions.length) * 100
-                        )}%`
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
-                  <div className="lg:col-span-8 bg-[#fffdf7] text-slate-800 rounded-2xl sm:rounded-3xl border-2 border-amber-200/90 shadow-2xl p-4 sm:p-8">
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3 sm:mb-5">
-                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900 text-white font-extrabold text-xs sm:text-sm">
-                        No. {currentIdx + 1}
-                      </span>
-                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-sky-100 text-sky-900 font-bold text-xs sm:text-sm">
-                        {currentQuestion.type === 'pg' ? 'Pilihan Ganda' : 'Esai / Isian'}
-                      </span>
-                      <span className="px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-amber-100 text-amber-900 font-bold text-xs sm:text-sm">
-                        📚 {currentQuestion.unit}
-                      </span>
-                      {unsureFlags[currentQuestion.id] && (
-                        <span className="px-2.5 py-1 rounded-xl bg-amber-400 text-slate-900 font-extrabold text-xs">
-                          ❓ Ragu-ragu
-                        </span>
-                      )}
-                    </div>
-
-                    {(currentQuestion.visualEmoji || currentQuestion.visualCaption) && (
-                      <div className="mb-3.5 sm:mb-6 rounded-2xl bg-amber-50/90 border-2 border-dashed border-amber-300/80 p-3 sm:p-5 flex flex-row items-center gap-3 sm:gap-4">
-                        {currentQuestion.visualEmoji && (
-                          <div className="text-2xl sm:text-5xl bg-white px-3 py-2 sm:px-5 sm:py-3.5 rounded-2xl shadow-sm border border-amber-100 select-none shrink-0">
-                            {currentQuestion.visualEmoji}
-                          </div>
-                        )}
-                        {currentQuestion.visualCaption && (
-                          <div className="text-left">
-                            <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-amber-700 block mb-0.5">
-                              Ilustrasi Gambar
-                            </span>
-                            <p className="text-xs sm:text-base font-medium text-slate-700 leading-snug">
-                              {currentQuestion.visualCaption}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="mb-4 sm:mb-7">
-                      <p className="text-base sm:text-xl font-bold text-slate-800 leading-snug sm:leading-relaxed whitespace-pre-line">
-                        {currentQuestion.question}
-                      </p>
-                    </div>
-
-                    {currentQuestion.type === 'pg' ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5 mb-4 sm:mb-8">
-                        {currentQuestion.options.map((opt) => {
-                          const isSelected = answers[currentQuestion.id] === opt.key;
-                          return (
-                            <button
-                              key={opt.key}
-                              type="button"
-                              onClick={() =>
-                                setAnswers((prev) => ({ ...prev, [currentQuestion.id]: opt.key }))
-                              }
-                              className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 text-left transition-all flex items-center gap-3 ${
-                                isSelected
-                                  ? 'bg-amber-100/80 border-[#f26d5b] shadow-md'
-                                  : 'bg-white border-slate-200 hover:border-amber-400 hover:bg-amber-50/40'
-                              }`}
-                            >
-                              <span
-                                className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl font-extrabold text-sm sm:text-base flex items-center justify-center shrink-0 ${
-                                  isSelected
-                                    ? 'bg-[#f26d5b] text-white'
-                                    : 'bg-slate-100 text-slate-700'
-                                }`}
-                              >
-                                {opt.key}
-                              </span>
-                              <span className="text-sm sm:text-lg font-bold text-slate-800">
-                                {opt.text}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="mb-4 sm:mb-8">
-                        <label className="block text-xs sm:text-sm font-bold text-slate-600 mb-1.5 sm:mb-2">
-                          ✏️ Ketik jawabanmu di kotak bawah ini ya:
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={answers[currentQuestion.id] || ''}
-                          onChange={(e) =>
-                            setAnswers((prev) => ({
-                              ...prev,
-                              [currentQuestion.id]: e.target.value
-                            }))
-                          }
-                          placeholder="Tulis jawabanmu di sini..."
-                        className="w-full p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 border-amber-300 focus:border-[#f26d5b] outline-none text-sm sm:text-lg font-bold text-slate-800 bg-white"
-                      />
-                    </div>
-                  )}
-
-                    {/* Baris Bawah: Kiri Sebelumnya/Kembali - Tengah Ragu-ragu - Kanan Selanjutnya/Kumpulkan */}
-                    <div className="pt-3 sm:pt-5 border-t-2 border-amber-100 flex items-center justify-between gap-2">
-                      <div className="flex-1 flex items-center justify-start">
-                        <button
-                          type="button"
-                          disabled={currentIdx === 0}
-                          onClick={() => goToQuestionIndex(currentIdx - 1)}
-                          className="inline-flex px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40 whitespace-nowrap"
-                        >
-                          ← Sebelumnya
-                        </button>
-                      </div>
-
-                      <div className="flex-1 flex items-center justify-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setUnsureFlags((prev) => ({
-                              ...prev,
-                              [currentQuestion.id]: !prev[currentQuestion.id]
-                            }))
-                          }
-                          className={`px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm border-2 whitespace-nowrap ${
-                            unsureFlags[currentQuestion.id]
-                              ? 'bg-amber-400 border-amber-500 text-slate-900'
-                              : 'bg-amber-50 border-amber-300 text-amber-800'
-                          }`}
-                        >
-                          ❓ Ragu-ragu
-                        </button>
-                      </div>
-
-                      <div className="flex-1 flex items-center justify-end">
-                        {currentIdx < activePackage.questions.length - 1 ? (
-                          <button
-                            type="button"
-                            onClick={() => goToQuestionIndex(currentIdx + 1)}
-                            className="px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-slate-900 text-white hover:bg-slate-800 whitespace-nowrap"
-                          >
-                            Selanjutnya →
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => openModalWithHistory(setShowSubmitConfirm, true)}
-                            className="px-2.5 py-2 sm:px-5 sm:py-2.5 rounded-xl font-extrabold text-xs sm:text-sm bg-emerald-600 text-white hover:bg-emerald-700 shadow-md whitespace-nowrap"
-                          >
-                            ✅ Kumpulkan
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* PANEL NAVIGASI NOMOR SOAL */}
-                  <aside className="lg:col-span-4 bg-white/[0.09] backdrop-blur-md text-white rounded-2xl sm:rounded-3xl border border-white/15 shadow-xl p-4 sm:p-6 lg:sticky lg:top-24">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="font-extrabold text-sm sm:text-base text-white">
-                        🧭 Navigasi Nomor Soal
-                      </h2>
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white/15 text-indigo-100">
-                        {activePackage.questions.length} Soal
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-5 gap-2.5 mb-5">
-                      {activePackage.questions.map((q, idx) => {
-                        const isCurrent = idx === currentIdx;
-                        const isAnswered = Boolean(answers[q.id] && answers[q.id].trim().length > 0);
-                        const isUnsure = Boolean(unsureFlags[q.id]);
-
-                        let btnStyle =
-                          'bg-white/[0.08] border-white/15 text-indigo-100 hover:bg-white/20';
-                        if (isUnsure) {
-                          btnStyle = 'bg-amber-400 border-amber-300 text-slate-900';
-                        } else if (isAnswered) {
-                          btnStyle = 'bg-[#f26d5b] border-[#ff9282] text-white';
-                        }
-
-                        return (
-                          <button
-                            key={q.id}
-                            type="button"
-                            onClick={() => goToQuestionIndex(idx)}
-                            className={`h-11 rounded-xl font-extrabold text-sm border transition-all flex items-center justify-center ${btnStyle} ${
-                              isCurrent ? 'ring-4 ring-amber-300/70 scale-105 z-10' : ''
-                            }`}
-                          >
-                            {idx + 1}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => openModalWithHistory(setShowSubmitConfirm, true)}
-                      className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-sm sm:text-base shadow-lg"
-                    >
-                      ✅ Kumpulkan & Cek Nilai
-                    </button>
-                  </aside>
-                </div>
-              </main>
-            )}
-
-            {/* VIEW 3: RESULTS & EXPLANATIONS */}
-            {activeView === 'results' && gradingResults && (
-              <main className="max-w-4xl mx-auto px-4 pt-6 space-y-6">
-                <div className="bg-[#fffdf7] text-slate-800 rounded-3xl border-2 border-amber-300 shadow-2xl p-6 sm:p-8 text-center">
-                  <div className="text-4xl mb-2">🏆</div>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-                    {getEncouragementMessage(gradingResults.finalScore)}
-                  </h2>
-                  <p className="text-xs sm:text-sm font-bold text-slate-500 mt-1">
-                    {activePackage.title} • Waktu: {elapsedDurationText}
-                  </p>
-
-                  <div className="flex items-center justify-center gap-1 my-3 text-2xl">
-                    {[1, 2, 3, 4, 5].map((starIdx) => (
-                      <span key={starIdx}>
-                        {starIdx <= getStarCount(gradingResults.finalScore) ? '⭐' : '☆'}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="my-5 inline-flex flex-wrap items-center justify-center gap-6 bg-amber-50 border-2 border-amber-200 px-8 py-4 rounded-3xl">
-                    <div>
-                      <span className="text-xs font-extrabold uppercase text-slate-500 block">
-                        Nilai Akhir
-                      </span>
-                      <span className="text-4xl sm:text-5xl font-black text-[#f26d5b]">
-                        {gradingResults.finalScore}
-                      </span>
-                      <span className="text-sm font-bold text-slate-400"> / 100</span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-extrabold uppercase text-slate-500 block">
-                        Jawaban Tepat
-                      </span>
-                      <span className="text-2xl sm:text-3xl font-black text-emerald-600">
-                        {gradingResults.correctCount} / {gradingResults.totalQuestions}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-xs font-extrabold uppercase text-slate-500 block">
-                        Bonus XP
-                      </span>
-                      <span className="text-2xl sm:text-3xl font-black text-amber-500">
-                        +{gradingResults.earnedStars} ⭐
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleStartPackage(activePackage)}
-                      className="px-5 py-3 rounded-2xl bg-[#f26d5b] hover:bg-[#e05b49] text-white font-extrabold text-sm shadow-md"
-                    >
-                      🔄 Ulangi Paket Ini
-                    </button>
-                    {isAdminUnlocked && (
-                      <button
-                        type="button"
-                        disabled={isRemixingPackageId === activePackage.id}
-                        onClick={() => handleGenerateVariationFromPackage(activePackage)}
-                        className="px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-sm shadow-md disabled:opacity-60"
-                      >
-                        {isRemixingPackageId === activePackage.id
-                          ? '⏳ Meracik Soal Baru...'
-                          : '✨ Buat Soal Variasi Baru'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setActiveView('library')}
-                      className="px-5 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-2 border-indigo-200 font-extrabold text-sm"
-                    >
-                      📂 Daftar Paket
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-5">
-                  <h3 className="text-lg sm:text-xl font-extrabold text-white px-1">
-                    💡 Pembahasan Lengkap & Tips Awas Jebakan
-                  </h3>
-
-                  {gradingResults.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`bg-[#fffdf7] text-slate-800 rounded-3xl border-2 p-5 sm:p-7 shadow-xl ${
-                        item.isCorrect ? 'border-emerald-300' : 'border-rose-300'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="px-3 py-1 rounded-xl bg-slate-800 text-white font-extrabold text-xs">
-                            Soal No. {item.number}
-                          </span>
-                          <span className="text-xs font-bold text-slate-500">{item.unit}</span>
-                        </div>
-
-                        {item.isCorrect ? (
-                          <span className="px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-xs">
-                            ✅ Benar (+{item.score} poin)
-                          </span>
-                        ) : (
-                          <span className="px-3.5 py-1 rounded-full bg-rose-100 text-rose-800 font-extrabold text-xs">
-                            ❌ Perlu Diperbaiki ({item.score} poin)
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-base sm:text-lg font-bold text-slate-800 mb-4 whitespace-pre-line">
-                        {item.question}
-                      </p>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                        <div
-                          className={`p-3.5 rounded-2xl border ${
-                            item.isCorrect
-                              ? 'bg-emerald-50/70 border-emerald-200'
-                              : 'bg-rose-50/70 border-rose-200'
-                          }`}
-                        >
-                          <span className="text-xs font-extrabold uppercase text-slate-500 block mb-1">
-                            Jawaban Kamu:
-                          </span>
-                          <p
-                            className={`font-bold text-sm sm:text-base ${
-                              item.isCorrect ? 'text-emerald-800' : 'text-rose-800'
-                            }`}
-                          >
-                            {item.userAnswerDisplay}
-                          </p>
-                        </div>
-
-                        <div className="p-3.5 rounded-2xl bg-sky-50/80 border border-sky-200">
-                          <span className="text-xs font-extrabold uppercase text-sky-700 block mb-1">
-                            Kunci Jawaban:
-                          </span>
-                          <p className="font-bold text-sm sm:text-base text-sky-950">
-                            {item.correctAnswerDisplay}
-                          </p>
-                        </div>
-                      </div>
-
-                      {item.aiFeedback && (
-                        <div className="mb-4 p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-purple-900 text-sm font-semibold">
-                          ✨ <strong>Catatan Guru AI:</strong> {item.aiFeedback}
-                        </div>
-                      )}
-
-                      <div className="mb-3.5 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200/80">
-                        <div className="font-extrabold text-emerald-800 text-sm mb-1.5">
-                          💡 Pembahasan Langkah demi Langkah
-                        </div>
-                        <p className="text-sm text-emerald-950 leading-relaxed whitespace-pre-line font-medium">
-                          {item.explanation || item.pembahasan}
-                        </p>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300/90">
-                        <div className="font-extrabold text-amber-900 text-sm mb-1">
-                          ⚠️ Awas Jebakan!
-                        </div>
-                        <p className="text-sm text-amber-950 leading-relaxed font-medium">
-                          {item.trapWarning || item.awasJebakan}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </main>
-            )}
-
-            {/* MODAL PILIH SOAL LAMA VS SOAL BARU */}
-            {packageChoiceModal && (
-              <div className="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4">
-                <div className="bg-[#fffdf7] text-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-amber-200 shadow-2xl space-y-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="inline-block px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs font-extrabold mb-1.5">
-                        {packageChoiceModal.subject} • Kls {packageChoiceModal.grade}
-                      </span>
-                      <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 leading-snug">
-                        Pilih Versi Latihan Soal
-                      </h3>
-                      <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                        Paket <strong>"{packageChoiceModal.title}"</strong> — silakan pilih versi soal yang ingin dikerjakan:
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPackageChoiceModal(null)}
-                      className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {hasSavedSession &&
-                      savedQuizSessionRef.current &&
-                      Date.now() - savedQuizSessionRef.current.savedAt <= 30 * 1000 && (
-                        <button
-                          type="button"
-                          onClick={handleResumeSavedQuizSession}
-                          className="w-full p-4 rounded-2xl border-2 border-emerald-400 bg-emerald-50 hover:bg-emerald-100 text-left transition-all flex items-center justify-between gap-3"
-                        >
-                          <div>
-                            <div className="font-extrabold text-sm sm:text-base text-emerald-900">
-                              ↩️ Lanjutkan Soal Tadi (No. {(savedQuizSessionRef.current.currentIdx || 0) + 1})
-                            </div>
-                            <div className="text-xs text-emerald-700 mt-0.5">
-                              Jawabanmu tersimpan sementara agar aman jika tidak sengaja ter-swipe
-                            </div>
-                          </div>
-                          <span className="text-lg font-extrabold text-emerald-600">→</span>
-                        </button>
-                      )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleStartSelectedVersion(packageChoiceModal, 'old')}
-                      className="w-full p-4 rounded-2xl border-2 border-amber-200 bg-white hover:border-[#f26d5b] hover:bg-amber-50/60 text-left transition-all flex items-center justify-between gap-3 group"
-                    >
-                      <div>
-                        <div className="font-extrabold text-sm sm:text-base text-slate-900 group-hover:text-[#f26d5b]">
-                          📘 Soal Lama (Set Utama)
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          {packageChoiceModal.questions.length} soal asli dari kisi-kisi utama
-                        </div>
-                      </div>
-                      <span className="text-lg font-extrabold text-slate-400 group-hover:text-[#f26d5b]">
-                        →
-                      </span>
-                    </button>
-
-                    {packageChoiceModal.variationQuestions &&
-                      packageChoiceModal.variationQuestions.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => handleStartSelectedVersion(packageChoiceModal, 'new')}
-                          className="w-full p-4 rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-purple-50 hover:border-indigo-500 text-left transition-all flex items-center justify-between gap-3 group"
-                        >
-                          <div>
-                            <div className="font-extrabold text-sm sm:text-base text-indigo-900">
-                              ✨ Soal Baru (Variasi AI)
-                            </div>
-                            <div className="text-xs text-indigo-700/80 mt-0.5">
-                              {packageChoiceModal.variationQuestions.length} soal variasi baru sesuai kisi-kisi
-                            </div>
-                          </div>
-                          <span className="text-lg font-extrabold text-indigo-500 group-hover:translate-x-0.5 transition-transform">
-                            →
-                          </span>
-                        </button>
-                      )}
-
-                    {isAdminUnlocked &&
-                      packageChoiceModal.bestScore !== null &&
-                      packageChoiceModal.bestScore !== undefined && (
-                        <button
-                          type="button"
-                          disabled={isRemixingPackageId === packageChoiceModal.id}
-                          onClick={() => handleGenerateVariationFromPackage(packageChoiceModal)}
-                          className="w-full p-4 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/70 hover:bg-purple-100/80 hover:border-purple-500 text-left transition-all flex items-center justify-between gap-3 disabled:opacity-60"
-                        >
-                          <div>
-                            <div className="font-extrabold text-sm text-purple-900">
-                              {isRemixingPackageId === packageChoiceModal.id
-                                ? '⏳ Sedang Meracik Soal Baru...'
-                                : packageChoiceModal.variationQuestions?.length > 0
-                                ? '🪄 Buat Ulang Soal Baru (Regenerate AI)'
-                                : '🪄 Buat Soal Baru (Generate Variasi AI)'}
-                            </div>
-                            <div className="text-xs text-purple-700/80 mt-0.5">
-                              Khusus Admin • Meracik variasi soal segar dari kisi-kisi ini
-                            </div>
-                          </div>
-                          <span className="text-base font-extrabold text-purple-600">+</span>
-                        </button>
-                      )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setPackageChoiceModal(null)}
-                    className="w-full py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs sm:text-sm"
-                  >
-                    Batal
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* MODAL LOGIN ADMIN & LUPA PASSWORD */}
-            {showAdminLoginModal && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
-                <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 border-2 border-indigo-100 shadow-2xl">
-                  {!showForgotPinView ? (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-extrabold text-slate-900">
-                          🔒 Masuk Menu Admin
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => setShowAdminLoginModal(false)}
-                          className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500 mb-4">
-                        Masukkan password admin untuk mengakses pengaturan API Key, Sync iPad, dan Upload Kisi-Kisi. (Password awal: <span className="font-bold text-slate-700">123456</span>)
-                      </p>
-                      {loginError && (
-                        <div className="mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                          ⚠️ {loginError}
-                        </div>
-                      )}
-                      <form onSubmit={handleAdminLoginSubmit} className="space-y-4">
-                        <input
-                          type="password"
-                          value={loginPinInput}
-                          onChange={(e) => setLoginPinInput(e.target.value)}
-                          placeholder="Masukkan password admin..."
-                          className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
-                          required
-                        />
-                        <div className="flex items-center justify-between text-xs">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowForgotPinView(true);
-                              setRecoveryError('');
-                            }}
-                            className="font-extrabold text-indigo-600 hover:underline"
-                          >
-                            Lupa password?
-                          </button>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setShowAdminLoginModal(false)}
-                            className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-600"
-                          >
-                            Batal
-                          </button>
-                          <button
-                            type="submit"
-                            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm"
-                          >
-                            Masuk
-                          </button>
-                        </div>
-                      </form>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-extrabold text-slate-900">
-                          🔄 Reset Password Admin
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => setShowAdminLoginModal(false)}
-                          className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500 mb-4">
-                        Masukkan kode pemulihan <span className="font-extrabold text-indigo-700">{ADMIN_RECOVERY_CODE}</span> lalu tentukan password admin baru kamu.
-                      </p>
-                      {recoveryError && (
-                        <div className="mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                          ⚠️ {recoveryError}
-                        </div>
-                      )}
-                      <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-600 mb-1">
-                            Kode Pemulihan
-                          </label>
-                          <input
-                            type="text"
-                            value={recoveryCodeInput}
-                            onChange={(e) => setRecoveryCodeInput(e.target.value)}
-                            placeholder="Ketik TOMMY2026"
-                            className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-600 mb-1">
-                            Password Baru
-                          </label>
-                          <input
-                            type="password"
-                            value={newPinInput}
-                            onChange={(e) => setNewPinInput(e.target.value)}
-                            placeholder="Minimal 4 karakter..."
-                            className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm"
-                            required
-                          />
-                        </div>
-                        <div className="flex gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => setShowForgotPinView(false)}
-                            className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-600"
-                          >
-                            Kembali
-                          </button>
-                          <button
-                            type="submit"
-                            className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm"
-                          >
-                            Simpan Password Baru
-                          </button>
-                        </div>
-                      </form>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* MODAL PANEL ADMIN (API KEY, SYNC IPAD, UPLOAD PDF) */}
-            {showAdminPanelModal && isAdminUnlocked && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-                <div className="bg-white text-slate-800 rounded-3xl max-w-lg w-full p-6 border-2 border-indigo-100 shadow-2xl space-y-5 my-auto">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <div>
-                      <h3 className="text-lg font-extrabold text-slate-900">
-                        🛠️ Menu Admin Juara Kelas
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Kelola API Key, sinkronisasi iPad, dan soal PDF.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowAdminPanelModal(false)}
-                      className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaveApiKey} className="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-extrabold uppercase text-slate-700">
-                        🔑 Gemini API Key
-                      </label>
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${geminiApiKey ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
-                        {geminiApiKey ? 'Aktif' : 'Belum Dipasang'}
-                      </span>
-                    </div>
-                    <input
-                      type="password"
-                      value={tempApiKey}
-                      onChange={(e) => setTempApiKey(e.target.value)}
-                      placeholder="Tempel kode AIzaSy... di sini"
-                      className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none font-bold text-sm bg-white"
-                      required
-                    />
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs sm:text-sm"
-                    >
-                      Simpan API Key
-                    </button>
-                  </form>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={handleManualSyncToCloud}
-                      className="py-3 px-4 rounded-2xl border-2 border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-900 font-extrabold text-xs sm:text-sm"
-                    >
-                      ☁️ Sync ke Cloud iPad
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAdminPanelModal(false);
-                        openUploadModalForCurrentFilter();
-                      }}
-                      className="py-3 px-4 rounded-2xl border-2 border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-900 font-extrabold text-xs sm:text-sm"
-                    >
-                      📄 + Upload PDF Baru
-                    </button>
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={handleLockAdmin}
-                      className="px-4 py-2.5 rounded-xl border-2 border-rose-200 text-rose-600 hover:bg-rose-50 font-extrabold text-xs sm:text-sm"
-                    >
-                      🔒 Kunci Menu Admin
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAdminPanelModal(false)}
-                      className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs sm:text-sm"
-                    >
-                      Tutup
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* MODAL UPLOAD PDF & GENERATOR SOAL */}
-            {showUploadModal && isAdminUnlocked && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-                <div className="bg-white text-slate-800 rounded-3xl max-w-2xl w-full p-6 border-2 border-indigo-100 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                    <div>
-                      <h3 className="text-lg font-extrabold text-slate-900">
-                        📄 Upload PDF Kisi-Kisi & Buat Soal AI
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Otomatis tersimpan ke perangkat ini & Cloud Firestore iPad.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => !isGenerating && setShowUploadModal(false)}
-                      className="px-2.5 py-1 rounded-xl text-slate-400 hover:bg-slate-100 font-bold"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  {generatorError && (
-                    <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border-2 border-rose-200 text-rose-800 text-xs font-semibold">
-                      ⚠️ {generatorError}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleGenerateAndSavePackage} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3.5">
-                      <div>
-                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
-                          Simpan ke Kelas
-                        </label>
-                        <select
-                          value={genGrade}
-                          onChange={(e) => setGenGrade(Number(e.target.value))}
-                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm bg-white"
-                        >
-                          {[1, 2, 3, 4, 5, 6].map((g) => (
-                            <option key={g} value={g}>
-                              Kelas {g} SD
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
-                          Simpan ke Semester
-                        </label>
-                        <select
-                          value={genSemester}
-                          onChange={(e) => setGenSemester(Number(e.target.value))}
-                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm bg-white"
-                        >
-                          <option value={1}>Semester 1 (Ganjil)</option>
-                          <option value={2}>Semester 2 (Genap)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                      <div>
-                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
-                          Mata Pelajaran
-                        </label>
-                        <input
-                          type="text"
-                          value={genSubject}
-                          onChange={(e) => setGenSubject(e.target.value)}
-                          placeholder="Contoh: Matematika, IPAS, English"
-                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
-                          Judul Paket Latihan
-                        </label>
-                        <input
-                          type="text"
-                          value={genTitle}
-                          onChange={(e) => setGenTitle(e.target.value)}
-                          placeholder="Contoh: Latihan ASAS Bab 1 - 4"
-                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-sm"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3.5">
-                      <div>
-                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
-                          Jumlah Pilihan Ganda
-                        </label>
-                        <input
-                          type="number"
-                          min={3}
-                          max={15}
-                          value={genPgCount}
-                          onChange={(e) => setGenPgCount(Number(e.target.value))}
-                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-extrabold text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1">
-                          Jumlah Soal Esai
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={10}
-                          value={genEssayCount}
-                          onChange={(e) => setGenEssayCount(Number(e.target.value))}
-                          className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 font-extrabold text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-extrabold uppercase text-slate-600">
-                          Sumber Kisi-Kisi:
-                        </span>
-                        <div className="inline-flex p-1 rounded-xl bg-slate-100 text-xs font-bold">
-                          <button
-                            type="button"
-                            onClick={() => setInputMode('pdf')}
-                            className={`px-3 py-1 rounded-lg ${
-                              inputMode === 'pdf' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
-                            }`}
-                          >
-                            Upload PDF
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setInputMode('manual')}
-                            className={`px-3 py-1 rounded-lg ${
-                              inputMode === 'manual' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
-                            }`}
-                          >
-                            Tempel Teks
-                          </button>
-                        </div>
-                      </div>
-
-                      {inputMode === 'pdf' ? (
-                        <div className="space-y-3">
-                          <div
-                            onClick={() => fileInputRef.current?.click()}
-                            className="border-2 border-dashed border-indigo-300 bg-indigo-50/40 rounded-2xl p-6 text-center cursor-pointer"
-                          >
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept=".pdf,application/pdf"
-                              onChange={(e) => handlePdfFileSelected(e.target.files?.[0])}
-                              className="hidden"
-                            />
-                            {isExtractingPdf ? (
-                              <div className="font-extrabold text-sm text-indigo-700">
-                                ⏳ Membaca dokumen PDF...
-                              </div>
-                            ) : uploadedPdfName ? (
-                              <div>
-                                <p className="font-extrabold text-sm text-slate-900">
-                                  📄 {uploadedPdfName}
-                                </p>
-                                <span className="text-xs font-bold text-emerald-700">
-                                  ✓ {uploadedPdfPages} Halaman Berhasil Diekstrak
-                                </span>
-                              </div>
-                            ) : (
-                              <div>
-                                <p className="font-extrabold text-sm text-slate-800">
-                                  Klik untuk pilih file PDF Kisi-Kisi
-                                </p>
-                                <p className="text-xs text-slate-500">Format file .pdf</p>
-                              </div>
-                            )}
-                          </div>
-                          {kisiKisiText && (
-                            <textarea
-                              rows={4}
-                              value={kisiKisiText}
-                              onChange={(e) => setKisiKisiText(e.target.value)}
-                              className="w-full p-3 rounded-xl border border-slate-200 text-xs bg-slate-50"
-                            />
-                          )}
-                        </div>
-                      ) : (
-                        <textarea
-                          rows={5}
-                          value={kisiKisiText}
-                          onChange={(e) => setKisiKisiText(e.target.value)}
-                          placeholder="Tempelkan teks kisi-kisi di sini..."
-                          className="w-full p-3.5 rounded-2xl border-2 border-slate-200 text-xs sm:text-sm"
-                        />
-                      )}
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
-                      <button
-                        type="button"
-                        disabled={isGenerating}
-                        onClick={() => setShowUploadModal(false)}
-                        className="px-5 py-3 rounded-2xl border-2 border-slate-200 font-bold text-sm text-slate-600"
-                      >
-                        Batal
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isGenerating || isExtractingPdf}
-                        className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-sm shadow-lg"
-                      >
-                        {isGenerating ? '⏳ Meracik Soal...' : '✨ Generate & Simpan Soal'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* MODAL KONFIRMASI HAPUS */}
-            {packageToDelete && isAdminUnlocked && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
-                <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 border-2 border-rose-100 shadow-2xl text-center">
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-2">Hapus Paket Soal Ini?</h3>
-                  <p className="text-sm text-slate-600 mb-5">
-                    Paket <strong>"{packageToDelete.title}"</strong> akan dihapus dari Kelas{' '}
-                    {packageToDelete.grade} Semester {packageToDelete.semester}.
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPackageToDelete(null)}
-                      className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleConfirmDeletePackage}
-                      className="flex-1 py-3 rounded-xl bg-rose-600 text-white font-extrabold text-sm"
-                    >
-                      Ya, Hapus
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* MODAL KONFIRMASI KUMPULKAN */}
-            {showSubmitConfirm && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
-                <div className="bg-white text-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-7 border-2 border-sky-100 shadow-2xl text-center">
-                  <div className="text-4xl mb-3">✅</div>
-                  <h3 className="text-xl font-extrabold text-slate-900 mb-2">
-                    Sudah Yakin Ingin Mengumpulkan?
-                  </h3>
-                  <p className="text-sm text-slate-600 mb-5 leading-relaxed">
-                    Kamu sudah menjawab <strong>{answeredCount}</strong> dari{' '}
-                    <strong>{activePackage.questions.length}</strong> soal
-                    {unsureCount > 0 ? ` (masih ada ${unsureCount} soal ditandai ragu-ragu)` : ''}.
-                    Yuk cek hasilnya sekarang!
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowSubmitConfirm(false)}
-                      className="flex-1 py-3 rounded-xl border-2 border-slate-200 font-bold text-sm text-slate-700 hover:bg-slate-100"
-                    >
-                      Cek Lagi
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleFinalizeAndGradeExam}
-                      className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-md"
-                    >
-                      Ya, Kumpulkan!
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* LOADING OVERLAY SAAT MENGOREKSI */}
-            {isGrading && (
-              <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4">
-                <div className="bg-white text-slate-800 rounded-3xl max-w-sm w-full p-7 border-2 border-indigo-100 shadow-2xl text-center">
-                  <div className="text-4xl animate-spin mb-4">⏳</div>
-                  <h3 className="text-lg font-extrabold text-slate-900 mb-1.5">
-                    Sebentar Ya, Sedang Mengoreksi...
-                  </h3>
-                  <p className="text-sm text-slate-600">
-                    Kakak AI sedang memeriksa jawaban Pilihan Ganda dan Esaimu dengan teliti! ✨
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <footer className="py-5 px-4 text-center text-xs font-bold text-indigo-200/75 border-t border-white/10 bg-[#12132e]/80 backdrop-blur-md">
-            Copyright Tommydomeh 2026
-          </footer>
-        </div>
-      );
-    }
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
-</body>
-</html>
+        let accumulatedScore =
