@@ -1279,8 +1279,10 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
             id: `q_${Date.now()}_${idx + 1}`
           }));
 
+          // ID unik dengan timestamp + random suffix agar generate berulang tidak pernah menimpa paket sebelumnya
+          const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
           const newPackageObj = {
-            id: `pkg_kls${genGrade}_sem${genSemester}_${Date.now()}`,
+            id: `pkg_kls${genGrade}_sem${genSemester}_${uniqueSuffix}`,
             isBuiltin: false,
             grade: Number(genGrade),
             semester: Number(genSemester),
@@ -1292,7 +1294,13 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
             questions: normalizedQuestions
           };
 
-          setPackages((prev) => [newPackageObj, ...prev]);
+          setPackages((prev) => {
+            const nextList = [newPackageObj, ...prev];
+            try {
+              localStorage.setItem('jk_packages_v2', JSON.stringify(nextList));
+            } catch (err) {}
+            return nextList;
+          });
           const syncRes = await savePackageToCloud(newPackageObj);
 
           setSelectedGrade(Number(genGrade));
