@@ -414,6 +414,63 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
     }
 
     // =========================================================================
+    // HELPER: NORMALISASI ANGKA <-> KATA BILANGAN (ID & EN) UNTUK JAWABAN ESAI
+    // =========================================================================
+    const NUMBER_WORD_TO_DIGIT = {
+      '0': '0', 'nol': '0', 'kosong': '0', 'zero': '0',
+      '1': '1', 'satu': '1', 'se': '1', 'one': '1',
+      '2': '2', 'dua': '2', 'two': '2',
+      '3': '3', 'tiga': '3', 'three': '3',
+      '4': '4', 'empat': '4', 'four': '4',
+      '5': '5', 'lima': '5', 'five': '5',
+      '6': '6', 'enam': '6', 'nam': '6', 'six': '6',
+      '7': '7', 'tujuh': '7', 'seven': '7',
+      '8': '8', 'delapan': '8', 'eight': '8',
+      '9': '9', 'sembilan': '9', 'nine': '9',
+      '10': '10', 'sepuluh': '10', 'ten': '10',
+      '11': '11', 'sebelas': '11', 'eleven': '11',
+      '12': '12', 'dua belas': '12', 'twelve': '12',
+      '13': '13', 'tiga belas': '13', 'thirteen': '13',
+      '14': '14', 'empat belas': '14', 'fourteen': '14',
+      '15': '15', 'lima belas': '15', 'fifteen': '15',
+      '16': '16', 'enam belas': '16', 'sixteen': '16',
+      '17': '17', 'tujuh belas': '17', 'seventeen': '17',
+      '18': '18', 'delapan belas': '18', 'eighteen': '18',
+      '19': '19', 'sembilan belas': '19', 'nineteen': '19',
+      '20': '20', 'dua puluh': '20', 'twenty': '20',
+      '30': '30', 'tiga puluh': '30', 'thirty': '30',
+      '40': '40', 'empat puluh': '40', 'forty': '40',
+      '50': '50', 'lima puluh': '50', 'fifty': '50',
+      '100': '100', 'seratus': '100', 'satu ratus': '100', 'hundred': '100', 'one hundred': '100'
+    };
+
+    function normalizeNumberText(raw) {
+      if (!raw) return '';
+      let cleaned = String(raw)
+        .toLowerCase()
+        .replace(/[.!?,;:'"()]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (NUMBER_WORD_TO_DIGIT[cleaned] !== undefined) {
+        return NUMBER_WORD_TO_DIGIT[cleaned];
+      }
+
+      // Ganti kata bilangan yang berdiri sendiri di dalam kalimat menjadi digitnya
+      const tokens = cleaned.split(' ').map((tok) => {
+        return NUMBER_WORD_TO_DIGIT[tok] !== undefined ? NUMBER_WORD_TO_DIGIT[tok] : tok;
+      });
+      return tokens.join(' ').trim();
+    }
+
+    function isEquivalentEssayAnswer(userRaw, expectedRaw) {
+      const uNorm = normalizeNumberText(userRaw);
+      const eNorm = normalizeNumberText(expectedRaw);
+      if (!uNorm || !eNorm) return false;
+      return uNorm === eNorm;
+    }
+
+    // =========================================================================
     // MAIN APP COMPONENT
     // =========================================================================
     function App() {
@@ -435,6 +492,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
 
       const [showSettingsModal, setShowSettingsModal] = useState(false);
       const [tempApiKeyInput, setTempApiKeyInput] = useState('');
+      const [showApiKeyPlain, setShowApiKeyPlain] = useState(false);
       const [newAdminPwdInput, setNewAdminPwdInput] = useState('');
       const [confirmAdminPwdInput, setConfirmAdminPwdInput] = useState('');
       const [pwdChangeMessage, setPwdChangeMessage] = useState(null);
@@ -750,6 +808,7 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const handleOpenAdminButton = () => {
         if (isAdminUnlocked) {
           setTempApiKeyInput(geminiApiKey);
+          setShowApiKeyPlain(false);
           setNewAdminPwdInput('');
           setConfirmAdminPwdInput('');
           setPwdChangeMessage(null);
@@ -1284,7 +1343,7 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
               systemInstruction: {
                 parts: [
                   {
-                    text: 'Kamu adalah guru SD yang ramah. Nilai jawaban esai siswa secara bijaksana (abaikan kapitalisasi/tanda baca kecil). Skor 100 jika benar, 50-85 jika sebagian benar, 0 jika salah. Beri feedback singkat ramah anak dalam Bahasa Indonesia.'
+                    text: 'Kamu adalah guru SD yang ramah, bijaksana, dan sangat menyemangati anak-anak. Nilai jawaban esai siswa secara adil: jika jawaban hanya berbeda penulisan antara angka dan huruf/kata bilangan (misalnya "6" dan "enam", "six" dan "6", "10" dan "sepuluh", atau beda kapitalisasi/tanda baca), WAJIB beri nilai BENAR penuh (skor 100). Beri skor 50-85 jika sebagian benar, 0 jika salah. Tulis feedback singkat ramah anak dalam Bahasa Indonesia.'
                   }
                 ]
               },
@@ -1318,15 +1377,15 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
 
         essayQuestions.forEach((q) => {
           if (!aiEssayEvaluations[q.id]) {
-            const cleanUser = (answers[q.id] || '').trim().toLowerCase().replace(/[.!?,]/g, '');
-            const cleanExpected = (q.sampleAnswer || q.correctAnswer || '')
-              .trim()
-              .toLowerCase()
-              .replace(/[.!?,]/g, '');
-            const isExact = cleanUser.length > 0 && cleanUser === cleanExpected;
+            const rawUser = (answers[q.id] || '').trim();
+            const rawExpected = (q.sampleAnswer || q.correctAnswer || '').trim();
+            const cleanUser = rawUser.toLowerCase().replace(/[.!?,]/g, '');
+            const cleanExpected = rawExpected.toLowerCase().replace(/[.!?,]/g, '');
+            const isNumberMatch = isEquivalentEssayAnswer(rawUser, rawExpected);
+            const isExact = isNumberMatch || (cleanUser.length > 0 && cleanUser === cleanExpected);
             const isPartial =
-              cleanUser.length > 0 &&
               !isExact &&
+              cleanUser.length > 0 &&
               (cleanExpected.includes(cleanUser) || cleanUser.includes(cleanExpected));
 
             aiEssayEvaluations[q.id] = {
@@ -1339,6 +1398,17 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
                 ? 'Hampir sempurna! Cek susunan lengkapnya di pembahasan ya.'
                 : 'Belum tepat, yuk baca pembahasan langkah demi langkah di bawah!'
             };
+          } else {
+            const rawUser = (answers[q.id] || '').trim();
+            const rawExpected = (q.sampleAnswer || q.correctAnswer || '').trim();
+            if (isEquivalentEssayAnswer(rawUser, rawExpected)) {
+              aiEssayEvaluations[q.id] = {
+                ...aiEssayEvaluations[q.id],
+                score: 100,
+                isCorrect: true,
+                feedback: 'Hebat sekali! Jawabanmu tepat (angka & huruf bernilai sama)!'
+              };
+            }
           }
         });
 
@@ -2391,7 +2461,7 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
                         🔓 Pengaturan Mode Admin
                       </h2>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Atur Gemini API Key dan ubah password keamanan Admin.
+                        Atur Gemini API Key untuk generator soal AI & ubah password Admin.
                       </p>
                     </div>
                     <button
@@ -2404,23 +2474,45 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
                   </div>
 
                   {pwdChangeMessage && (
-                    <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                      ⚠️ {pwdChangeMessage.text}
+                    <div
+                      className={`p-3 rounded-2xl text-xs font-bold border ${
+                        pwdChangeMessage.type === 'error'
+                          ? 'bg-rose-50 border-rose-200 text-rose-700'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      }`}
+                    >
+                      {pwdChangeMessage.text}
                     </div>
                   )}
 
-                  <form onSubmit={handleSaveSettings} className="space-y-4">
+                  <form onSubmit={handleSaveSettings} autoComplete="off" className="space-y-4">
                     <div>
                       <label className="block text-xs font-extrabold uppercase text-slate-600 mb-1.5">
                         Gemini API Key (Google AI Studio)
                       </label>
-                      <input
-                        type="password"
-                        value={tempApiKeyInput}
-                        onChange={(e) => setTempApiKeyInput(e.target.value)}
-                        placeholder="AIzaSy..."
-                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold"
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          name="jk_gemini_apikey_field"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck="false"
+                          value={tempApiKeyInput}
+                          onChange={(e) => setTempApiKeyInput(e.target.value)}
+                          placeholder="AIzaSy..."
+                          style={showApiKeyPlain ? {} : { WebkitTextSecurity: 'disc' }}
+                          className="w-full pl-4 pr-12 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none text-sm font-bold"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKeyPlain((prev) => !prev)}
+                          className="absolute right-3 px-2 py-1 text-xs font-extrabold text-slate-500 hover:text-indigo-600"
+                          title={showApiKeyPlain ? 'Sembunyikan API Key' : 'Tampilkan API Key'}
+                        >
+                          {showApiKeyPlain ? '🙈' : '👁️'}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="pt-3 border-t border-slate-100 space-y-3">
@@ -2430,6 +2522,8 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <input
                           type="password"
+                          name="jk_new_admin_pwd"
+                          autoComplete="new-password"
                           value={newAdminPwdInput}
                           onChange={(e) => setNewAdminPwdInput(e.target.value)}
                           placeholder="Password baru..."
@@ -2437,6 +2531,8 @@ Buat tepat ${safePgCount} soal Pilihan Ganda (type: "pg") dan ${safeEssayCount} 
                         />
                         <input
                           type="password"
+                          name="jk_confirm_admin_pwd"
+                          autoComplete="new-password"
                           value={confirmAdminPwdInput}
                           onChange={(e) => setConfirmAdminPwdInput(e.target.value)}
                           placeholder="Ulangi password baru..."
