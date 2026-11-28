@@ -441,7 +441,11 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       '30': '30', 'tiga puluh': '30', 'thirty': '30',
       '40': '40', 'empat puluh': '40', 'forty': '40',
       '50': '50', 'lima puluh': '50', 'fifty': '50',
-      '100': '100', 'seratus': '100', 'satu ratus': '100', 'hundred': '100', 'one hundred': '100'
+      '100': '100', 'seratus': '100', 'satu ratus': '100', 'hundred': '100', 'one hundred': '100',
+      '1/2': '0.5', 'setengah': '0.5', 'separuh': '0.5', 'satu per dua': '0.5', 'seperdua': '0.5', 'half': '0.5',
+      '1/3': '1/3', 'sepertiga': '1/3', 'satu per tiga': '1/3',
+      '1/4': '0.25', 'seperempat': '0.25', 'satu per empat': '0.25', 'quarter': '0.25',
+      '3/4': '0.75', 'tiga per empat': '0.75'
     };
 
     function normalizeNumberText(raw) {
@@ -456,6 +460,11 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
         return NUMBER_WORD_TO_DIGIT[cleaned];
       }
 
+      // Jika hanya satu kata/angka (misal "Enam" atau "6"), langsung kembalikan nilainya
+      if (!cleaned.includes(' ') && NUMBER_WORD_TO_DIGIT[cleaned] !== undefined) {
+        return NUMBER_WORD_TO_DIGIT[cleaned];
+      }
+
       // Ganti kata bilangan yang berdiri sendiri di dalam kalimat menjadi digitnya
       const tokens = cleaned.split(' ').map((tok) => {
         return NUMBER_WORD_TO_DIGIT[tok] !== undefined ? NUMBER_WORD_TO_DIGIT[tok] : tok;
@@ -467,7 +476,20 @@ Mata Pelajaran: Bahasa Inggris | Kelas: II / Semester 1
       const uNorm = normalizeNumberText(userRaw);
       const eNorm = normalizeNumberText(expectedRaw);
       if (!uNorm || !eNorm) return false;
-      return uNorm === eNorm;
+      if (uNorm === eNorm) return true;
+
+      // Jika jawaban user adalah angka/kata bilangan tunggal (misal "6" / "enam")
+      // dan kunci jawabannya memuat angka yang sama diikuti satuan (misal "6 bola")
+      const uTokens = uNorm.split(' ');
+      const eTokens = eNorm.split(' ');
+      if (uTokens.length === 1 && eTokens.includes(uTokens[0])) {
+        return true;
+      }
+      if (eTokens.length === 1 && uTokens.includes(eTokens[0])) {
+        return true;
+      }
+
+      return false;
     }
 
     // =========================================================================
